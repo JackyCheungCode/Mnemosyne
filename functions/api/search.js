@@ -134,9 +134,14 @@ export async function onRequestPost({request,env}){
   const pageUrl=new URL(first);pageUrl.searchParams.set("start",String(page*10));
   const result=await fetchPage({url:pageUrl.toString(),env,page});
   if(result.upstreamError){
-   return reply({error:result.upstreamError.message,code:result.upstreamError.code,retryAfterSeconds:result.upstreamError.retryAfterSeconds,details:result.upstreamError},429);
+   const rejected={page:page+1,code:result.upstreamError.code,brightDataErrorCode:result.upstreamError.brightDataErrorCode,upstreamStatus:result.upstreamError.upstreamStatus,retryAfterSeconds:result.upstreamError.retryAfterSeconds,responsePreview:result.upstreamError.responsePreview};
+   if(all.length){
+    failures.push(rejected);
+    break;
+   }
+   return reply({error:result.upstreamError.message,code:result.upstreamError.code,retryAfterSeconds:result.upstreamError.retryAfterSeconds,failedPage:page+1,query:q,details:rejected},429);
   }
-  if(result.failure){failures.push({page:page+1,...result.failure});if(page===0)return reply({error:"Bright Data SERP 请求失败，已自动重试 3 次。",code:"UPSTREAM_REQUEST_FAILED",details:result.failure},502);break}
+  if(result.failure){failures.push({page:page+1,...result.failure});if(page===0)return reply({error:"Bright Data SERP 请求失败，已按错误类型完成有限重试。",code:"UPSTREAM_REQUEST_FAILED",failedPage:page+1,query:q,details:result.failure},502);break}
   if(result.schemaError){if(page===0)return reply({...result.schemaError,page:page+1},502);failures.push({page:page+1,code:"SERP_SCHEMA_UNRECOGNIZED",diagnostics:result.schemaError.diagnostics});break}
   const normalized=result.organic.map(normalize);
   let added=0;
@@ -147,5 +152,5 @@ export async function onRequestPost({request,env}){
   await sleep(180);
  }
  const results=all.slice(0,target);
- return reply({results,total:results.length,requested:target,query:q,pagesFetched:pages.length,pages,partial:results.length<target&&failures.length>0,warning:failures.length?"部分分页请求失败，已返回成功获取的结果。":results.length<target?"Google 返回的自然搜索结果不足所请求数量。":null,failures:failures.length?failures:undefined});
+ return reply({results,total:results.length,requested:target,query:q,pagesFetched:pages.length,pages,partial:results.length<target&&failures.length>0,warning:failures.length?"部分分页请求失败，已保留并返回成功获取的结果。":results.length<target?"Google 返回的自然搜索结果不足所请求数量。":null,failures:failures.length?failures:undefined});
 }
