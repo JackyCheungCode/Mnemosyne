@@ -16,7 +16,7 @@ export async function onRequestPost({request,env}){
   const q=String(x.query||"").trim();if(!q)return reply({error:"搜索关键词不能为空"},400);
   const n=Math.min(50,Math.max(1,Number(x.depth)||20));
   const u=new URL("https://www.google.com/search");
-  u.searchParams.set("q",q);u.searchParams.set("brd_json","1");
+  u.searchParams.set("q",q);u.searchParams.set("num",String(n));u.searchParams.set("brd_json","1");
   if(x.language)u.searchParams.set("hl",String(x.language));
   if(x.country)u.searchParams.set("gl",String(x.country));
   try{
