@@ -34,10 +34,34 @@ function findOrganic(input,depth=0){
  }
  return null;
 }
+function resolveGoogleRedirect(rawUrl){
+ let current=String(rawUrl||"").trim();
+ for(let depth=0;depth<3;depth++){
+  let parsed;try{parsed=new URL(current)}catch{return current}
+  const host=parsed.hostname.toLowerCase().replace(/^www\\./,"");
+  if(!(host==="google.com"||host.endsWith(".google.com")))return current;
+  const keys=["url","q","adurl","u","target"];
+  let target="";
+  for(const key of keys){
+   const value=parsed.searchParams.get(key);
+   if(!value)continue;
+   let candidate=value;
+   for(let n=0;n<2;n++){try{candidate=decodeURIComponent(candidate)}catch{break}}
+   try{
+    const dest=new URL(candidate);
+    if((dest.protocol==="http:"||dest.protocol==="https:")&&!((dest.hostname||"").toLowerCase()==="google.com"||(dest.hostname||"").toLowerCase().endsWith(".google.com"))){target=dest.toString();break}
+   }catch{}
+  }
+  if(!target)return "";
+  current=target;
+ }
+ return current;
+}
 function normalize(item,index){
- const url=item?.link||item?.url||item?.href||item?.destination||item?.link_url||"";
- let domain="";try{domain=new URL(url).hostname.replace(/^www\./,"")}catch{}
- return {rank:item?.global_rank||item?.position||item?.rank||index+1,title:item?.title||item?.name||"",url,domain,description:item?.description||item?.snippet||item?.text||item?.rich_snippet?.top?.extensions?.join(" ")||""};
+ const rawUrl=item?.link||item?.url||item?.href||item?.destination||item?.link_url||"";
+ const url=resolveGoogleRedirect(rawUrl);
+ let domain="";try{domain=new URL(url).hostname.replace(/^www\\./,"")}catch{}
+ return {rank:item?.global_rank||item?.position||item?.rank||index+1,title:item?.title||item?.name||"",url,domain,sourceUrl:rawUrl!==url?rawUrl:undefined,description:item?.description||item?.snippet||item?.text||item?.rich_snippet?.top?.extensions?.join(" ")||""};
 }
 function inspectPayload(raw,parsed,headers,status){
  const root=unwrap(parsed??raw);
