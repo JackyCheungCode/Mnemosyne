@@ -68,6 +68,12 @@ async function fetchPage({url,env,page}){
     signal:AbortSignal.timeout(30000)
    });
    const raw=await response.text();
+   const brdCode=response.headers.get("x-brd-error-code")||response.headers.get("x-brd-error")||"";
+   if(brdCode==="failed_query_rejected"||/This query recently failed and cannot be attempted at this time/i.test(raw)){
+    const match=raw.match(/minimum of\\s+(\\d+)\\s+seconds/i);
+    const retryAfterSeconds=match?Number(match[1]):15;
+    return {upstreamError:{code:"BRIGHTDATA_QUERY_REJECTED",message:"Bright Data 暂时拒绝了该查询。请等待至少 "+retryAfterSeconds+" 秒后再重试。",retryAfterSeconds,upstreamStatus:response.status,brightDataErrorCode:brdCode||"failed_query_rejected",brightDataRequestId:response.headers.get("x-brd-request-id")||response.headers.get("x-request-id")||null,responsePreview:raw.slice(0,420)}};
+   }
    if(response.ok){
     const parsed=parseJson(raw);
     const organic=findOrganic(parsed??raw);
@@ -103,6 +109,9 @@ export async function onRequestPost({request,env}){
  for(let page=0;page<pageCount;page++){
   const pageUrl=new URL(first);pageUrl.searchParams.set("start",String(page*10));
   const result=await fetchPage({url:pageUrl.toString(),env,page});
+  if(result.upstreamError){
+   return reply({error:result.upstreamError.message,code:result.upstreamError.code,retryAfterSeconds:result.upstreamError.retryAfterSeconds,details:result.upstreamError},429);
+  }
   if(result.failure){failures.push({page:page+1,...result.failure});if(page===0)return reply({error:"Bright Data SERP 请求失败，已自动重试 3 次。",code:"UPSTREAM_REQUEST_FAILED",details:result.failure},502);break}
   if(result.schemaError){if(page===0)return reply({...result.schemaError,page:page+1},502);failures.push({page:page+1,code:"SERP_SCHEMA_UNRECOGNIZED",diagnostics:result.schemaError.diagnostics});break}
   const normalized=result.organic.map(normalize);
