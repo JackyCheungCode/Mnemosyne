@@ -1,12 +1,21 @@
 const reply=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
 function isPublicHost(host){
- const h=host.toLowerCase().replace(/^\[|\]$/g,"");
- if(!h||h==="localhost"||h.endsWith(".localhost")||h.endsWith(".local")||h.endsWith(".internal"))return false;
- if(/^\d{1,3}(\.\d{1,3}){3}$/.test(h)){
+ const h=host.toLowerCase().replace(/^\\[|\\]$/g,"");
+ if(!h||h==="localhost"||h.endsWith(".localhost")||h.endsWith(".local")||h.endsWith(".internal")||h.endsWith(".onion")||h.endsWith(".arpa"))return false;
+ // Reject non-standard numeric IPv4 forms as well as literal IPv6 addresses.
+ if(/^(?:0x[0-9a-f]+|[0-9]+)$/i.test(h)||h.includes(":"))return false;
+ if(/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(h)){
   const p=h.split(".").map(Number);if(p.some(n=>n>255))return false;
-  return !(p[0]===0||p[0]===10||p[0]===127||p[0]>=224||(p[0]===169&&p[1]===254)||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&p[1]===168));
+  const a=p[0],b=p[1],c=p[2];
+  if(a===0||a===10||a===127||a>=224)return false;
+  if(a===169&&b===254)return false;
+  if(a===172&&b>=16&&b<=31)return false;
+  if(a===192&&(b===168||b===0))return false;
+  if(a===100&&b>=64&&b<=127)return false;
+  if(a===198&&(b===18||b===19||b===51))return false;
+  if(a===203&&b===0&&c===113)return false;
+  return true;
  }
- if(h.includes(":"))return false;
  return h.includes(".")&&!h.endsWith(".test")&&!h.endsWith(".example")&&!h.endsWith(".invalid");
 }
 function clean(s){return String(s||"").replace(/<[^>]*>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim().slice(0,500)}
@@ -51,7 +60,7 @@ async function readLimited(response,maxBytes=600000){
 export async function onRequestPost({request}){
  let body;try{body=await request.json()}catch{return reply({error:"请求格式错误"},400)}
  let current;try{current=new URL(String(body.url||""))}catch{return reply({error:"请提供有效的网站 URL"},400)}
- if(!["http:","https:"].includes(current.protocol)||!isPublicHost(current.hostname))return reply({error:"出于安全原因，只能验证公开网站的 HTTP/HTTPS 地址。"},400);
+ if(!["http:","https:"].includes(current.protocol)||current.username||current.password||!isPublicHost(current.hostname))return reply({error:"出于安全原因，只能验证公开网站的 HTTP/HTTPS 地址。"},400);
  try{
   let response=null;
   for(let i=0;i<4;i++){
