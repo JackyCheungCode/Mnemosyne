@@ -70,7 +70,7 @@ async function fetchPage({url,env,page}){
    const raw=await response.text();
    const brdCode=response.headers.get("x-brd-error-code")||response.headers.get("x-brd-error")||"";
    if(brdCode==="failed_query_rejected"||/This query recently failed and cannot be attempted at this time/i.test(raw)){
-    const match=raw.match(/minimum of\\s+(\\d+)\\s+seconds/i);
+    const match=raw.match(/minimum of\s+(\d+)\s+seconds/i);
     const retryAfterSeconds=match?Number(match[1]):15;
     return {upstreamError:{code:"BRIGHTDATA_QUERY_REJECTED",message:"Bright Data 暂时拒绝了该查询。请等待至少 "+retryAfterSeconds+" 秒后再重试。",retryAfterSeconds,upstreamStatus:response.status,brightDataErrorCode:brdCode||"failed_query_rejected",brightDataRequestId:response.headers.get("x-brd-request-id")||response.headers.get("x-request-id")||null,responsePreview:raw.slice(0,420)}};
    }
