@@ -55,8 +55,11 @@ async function fetchPage({url,env,page}){
     const parsed=parseJson(raw);
     const organic=findOrganic(parsed??raw);
     if(organic)return {organic,parsed,raw,status:response.status,contentType:response.headers.get("content-type")||""};
-    // A successful but malformed response is not blindly retried: return diagnostics to the caller.
-    return {schemaError:diagnostic(response.status,raw),raw,status:response.status,contentType:response.headers.get("content-type")||""};
+    // Retry transient empty/CAPTCHA/unexpected payloads before declaring a schema failure.
+    last={schemaError:diagnostic(response.status,raw)};
+    if(attempt===2)return {schemaError:last.schemaError,raw,status:response.status,contentType:response.headers.get("content-type")||""};
+    await sleep(500*(2**attempt));
+    continue;
    }
    const retryable=response.status===408||response.status===429||response.status>=500;
    last={status:response.status,body:raw.slice(0,1000)};
