@@ -494,3 +494,13 @@ aside#app-sidebar nav a.active .nav-icon{color:#714b67}
 }
 .country-option{min-height:36px}
 .country-option span:last-child,.odoo-select-value span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Task-centric lead workflow */
+.task-flow{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:8px;overflow-x:auto;padding:4px 0 22px;margin-bottom:22px}
+.task-flow-step{display:flex;min-width:120px;flex-direction:column;gap:7px;padding:13px 12px;background:#f4f3f2;border-radius:6px;color:#21272b;text-decoration:none}
+.task-flow-step>span{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#d9d7d5;color:#57534f;font-size:12px;font-weight:700}
+.task-flow-step b{font-size:13px;font-weight:650}.task-flow-step small{font-size:11px;color:#716c67;line-height:1.4}
+.task-flow-step.is-done{background:#eaf3ee}.task-flow-step.is-done>span{background:#287d52;color:#fff}
+.task-flow-step.is-current{background:#f1eaf0;outline:1px solid #714b67}.task-flow-step.is-current>span{background:#714b67;color:#fff}
+.task-context{margin-bottom:16px;background:#f7f3f6}.task-context h3{margin:5px 0}.task-context p{margin:5px 0 10px;color:#666}
+@media(max-width:900px){.task-flow{grid-template-columns:repeat(7,140px)}}
