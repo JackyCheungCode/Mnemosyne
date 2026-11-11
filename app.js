@@ -158,35 +158,34 @@ function renderRegions(){
 function safe(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 initAuth();
 async function renderVerify(){
- let candidates=[];try{candidates=JSON.parse(localStorage.getItem('mnemosyne_candidates')||'[]')||[]}catch{}
- app.innerHTML=`<div class="eyebrow">DISCOVERY / VERIFICATION</div><h1 class="title">候选企业验证</h1><p class="desc">对 Google SERP 返回的网站进行访问和初步身份识别。验证结果是机器辅助判断，不会把无法确认的网站自动认定为企业官网。</p>
- <section class="panel verify-toolbar"><div><h3>候选网站</h3><p class="section-note">数据保存在当前浏览器。先选择网站，再执行验证；也可以验证全部待验证网站。</p></div><div class="verify-actions"><button class="btn secondary" id="verify-all">验证全部待验证</button><button class="btn" id="verify-selected">验证选中项</button></div></section>
- <div class="verify-summary" id="verify-summary"></div><div class="table-scroll"><table class="table verify-table"><thead><tr><th class="check-col"><input type="checkbox" id="select-all" aria-label="全选"></th><th>排名</th><th>搜索标题</th><th>候选网站</th><th>验证状态</th><th>判断依据</th><th>操作</th></tr></thead><tbody id="candidate-rows"></tbody></table></div><p class="hint">说明：当前阶段只做网站首页访问、企业身份线索提取和初步相关性判断；不等同于人工尽调，也不会自动收集联系人。</p>`;
- const rows=document.querySelector('#candidate-rows');
- const save=()=>localStorage.setItem('mnemosyne_candidates',JSON.stringify(candidates));
- const statusLabel=s=>({ '待验证':'待验证','验证中':'验证中','疑似官网':'疑似官网','已验证':'已验证','非官网':'非官网','无法访问':'无法访问','需要复核':'需要复核'}[s]||s||'待验证');
- function draw(){
-  document.querySelector('#verify-summary').innerHTML=['待验证','疑似官网','已验证','非官网','无法访问','需要复核'].map(s=>'<span class="summary-chip">'+s+' <b>'+candidates.filter(x=>x.status===s).length+'</b></span>').join('');
-  rows.innerHTML=candidates.length?candidates.map((x,i)=>'<tr><td><input type="checkbox" class="candidate-check" data-index="'+i+'"></td><td>'+(x.rank||i+1)+'</td><td title="'+safe(x.title)+'">'+safe(x.title)+'</td><td title="'+safe(x.url)+'"><a href="'+safe(x.url)+'" target="_blank" rel="noopener">'+safe(x.domain||x.url)+'</a></td><td><span class="status-pill status-'+(x.status==='已验证'?'good':x.status==='非官网'?'bad':x.status==='疑似官网'?'maybe':'pending')+'">'+statusLabel(x.status)+'</span></td><td title="'+safe(x.verification?.reason||'尚未验证')+'">'+safe(x.verification?.reason||'尚未验证')+'</td><td><button class="text-btn verify-one" data-index="'+i+'" '+(x.status==='验证中'?'disabled':'')+'>重新验证</button></td></tr>').join(''):'<tr><td colspan="7" class="empty-state">暂无候选网站。请先到「官网搜索」执行一次搜索。</td></tr>';
- }
- async function verifyIndex(i){
-  const item=candidates[i];if(!item)return;
-  item.status='验证中';save();draw();
+ const searchTaskCode=new URLSearchParams(location.search).get('task')||'';
+ app.innerHTML='<div class="eyebrow">LEAD ACQUISITION / HUMAN REVIEW</div><h1 class="title">企业人工验证</h1><p class="desc">逐家核实采集到的企业资料。只有标记为“验证通过”的企业才会进入正式线索列表。</p>'+
+ (searchTaskCode?'<section class="panel task-context"><h3>当前任务：'+safe(searchTaskCode)+'</h3><p>仅显示该任务获取详细信息的企业。</p><a class="text-btn" href="/tasks?task='+encodeURIComponent(searchTaskCode)+'">← 返回任务流程</a></section>':'')+
+ '<section class="panel"><div class="review-control-top"><div><h3>待人工验证企业</h3><p class="section-note">机器采集结果仅作为参考，必须人工确认后才进入线索库。</p></div><button class="btn secondary" id="verify-refresh">刷新</button></div><div class="table-scroll"><table class="table"><thead><tr><th>企业名称 / 官网</th><th>国家与地址</th><th>公开联系方式</th><th>主营产品</th><th>验证备注</th><th>操作</th></tr></thead><tbody id="verify-rows"><tr><td colspan="6">正在加载企业资料…</td></tr></tbody></table></div><p class="hint" id="verify-message"></p></section>';
+ const rows=document.querySelector('#verify-rows'),message=document.querySelector('#verify-message');
+ async function load(){
+  rows.innerHTML='<tr><td colspan="6">正在加载…</td></tr>';
   try{
-   const r=await fetch('/api/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:item.url})});
-   const d=await r.json();if(!r.ok)throw new Error(d.error||'验证请求失败');
-   item.verification=d;item.verifiedAt=new Date().toISOString();item.status=d.status||'需要复核';
-  }catch(e){item.status='无法访问';item.verification={reason:e.message};item.verifiedAt=new Date().toISOString()}
-  save();draw();
+   const d=await intelligenceApi({action:'list_companies',verificationStatus:'pending',searchTaskCode,limit:200});
+   rows.innerHTML=d.companies.length?d.companies.map(x=>{
+    const sites=(x.company_websites||[]).map(z=>z.websites).filter(Boolean);
+    const domains=sites.map(w=>w.normalized_host).join('、');
+    return '<tr><td><strong>'+safe(x.company_name||'未命名企业')+'</strong><br><small>'+safe(domains||'无关联官网')+'</small></td><td>'+safe([x.country,x.address].filter(Boolean).join(' · ')||'—')+'</td><td>'+safe([...(x.emails||[]),...(x.phones||[])].join(' / ')||'—')+'</td><td>'+safe((x.main_products||[]).join('、')||'—')+'</td><td><input class="verify-note" data-id="'+safe(x.id)+'" placeholder="填写人工核验备注" value="'+safe(x.verification_notes||'')+'"></td><td><button class="btn" data-verify="verified" data-id="'+safe(x.id)+'">验证通过</button> <button class="btn secondary" data-verify="rejected" data-id="'+safe(x.id)+'">排除</button></td></tr>';
+   }).join(''):'<tr><td colspan="6" class="empty-state">当前任务没有待验证企业。请先完成官网审核并获取详细信息。</td></tr>';
+   message.textContent='待验证企业：'+d.total+' 家';
+  }catch(e){rows.innerHTML='<tr><td colspan="6">'+safe(e.message)+'</td></tr>'}
  }
- async function run(indices){const unique=[...new Set(indices)].filter(i=>candidates[i]&&candidates[i].status!=='验证中');if(!unique.length)return;for(let p=0;p<unique.length;p+=3){await Promise.all(unique.slice(p,p+3).map(verifyIndex))}}
- document.querySelector('#verify-all').onclick=()=>run(candidates.map((x,i)=>i).filter(i=>['待验证','需要复核','无法访问'].includes(candidates[i].status)));
- document.querySelector('#verify-selected').onclick=()=>run([...document.querySelectorAll('.candidate-check:checked')].map(x=>Number(x.dataset.index)));
- document.querySelector('#select-all').onchange=e=>document.querySelectorAll('.candidate-check').forEach(x=>x.checked=e.target.checked);
- rows.onclick=e=>{const b=e.target.closest('.verify-one');if(b)verifyIndex(Number(b.dataset.index))};
- draw();
+ rows.addEventListener('click',async e=>{
+  const button=e.target.closest('[data-verify]');if(!button)return;
+  const id=button.dataset.id,decision=button.dataset.verify;
+  const note=document.querySelector('.verify-note[data-id="'+CSS.escape(id)+'"]')?.value||'';
+  button.disabled=true;button.textContent='正在保存…';
+  try{await intelligenceApi({action:'verify_company',companyId:id,decision,notes:note});await load()}
+  catch(err){message.textContent=err.message;button.disabled=false;button.textContent=decision==='verified'?'验证通过':'排除'}
+ });
+ document.querySelector('#verify-refresh').onclick=load;
+ load();
 }
-
 async function intelligenceApi(body){const r=await fetch('/api/intelligence',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'情报服务请求失败');return d}
 function workflowHeader(active,title,desc){return '<div class="eyebrow">COMPANY INTELLIGENCE / WORKFLOW</div><h1 class="title">'+title+'</h1><p class="desc">'+desc+'</p><div class="discovery-tabs workflow-tabs"><a href="/search">开始采集</a><a class="'+(active==='websites'?'active':'')+'" href="/search?tab=websites">候选官网</a><a class="'+(active==='review'?'active':'')+'" href="/search?tab=review">官网审核</a><a class="'+(active==='tasks'?'active':'')+'" href="/search?tab=intelligence">采集任务</a><a class="'+(active==='results'?'active':'')+'" href="/search?tab=company-results">情报结果</a><a href="/search?tab=history">搜索历史</a></div>'}
 function renderWebsites(){
