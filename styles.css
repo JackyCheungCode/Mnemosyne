@@ -504,3 +504,14 @@ aside#app-sidebar nav a.active .nav-icon{color:#714b67}
 .task-flow-step.is-current{background:#f1eaf0;outline:1px solid #714b67}.task-flow-step.is-current>span{background:#714b67;color:#fff}
 .task-context{margin-bottom:16px;background:#f7f3f6}.task-context h3{margin:5px 0}.task-context p{margin:5px 0 10px;color:#666}
 @media(max-width:900px){.task-flow{grid-template-columns:repeat(7,145px)}}
+
+/* Unified task workspace navigation */
+.task-stage-nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin:4px 0 24px;padding:8px;background:#fff;border:1px solid #e8eaed;border-radius:12px}
+.task-stage-nav a{display:flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:7px 8px;border-radius:8px;color:#5f6368;font-size:12px;font-weight:600;white-space:nowrap}
+.task-stage-nav a:hover{background:#f6f7f8;text-decoration:none}
+.task-stage-nav a.active{background:#f1ebef;color:#714b67}
+.task-stage-nav a span{display:grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;background:#f1f3f4;color:#5f6368;font-size:10px}
+.task-stage-nav a.active span{background:#714b67;color:#fff}
+.task-workspace-note{margin:0 0 22px;padding:13px 16px;border-left:3px solid #714b67;background:#f7f4f6;color:#5f6368;font-size:12px;line-height:1.7}
+@media(max-width:900px){.task-stage-nav{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.task-stage-nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:6px}.task-stage-nav a{justify-content:flex-start;font-size:11px}.task-stage-nav a span{width:20px;height:20px}}
