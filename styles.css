@@ -538,3 +538,22 @@ aside#app-sidebar nav a.active .nav-icon{color:#714b67}
 @media(prefers-reduced-motion:reduce){
  .progress-track.is-active i,.progress-track.is-active i::after{animation:none}
 }
+
+
+/* Multi-task live monitor */
+.active-task-board{margin:0 0 18px;padding:18px 20px;background:#f7f6f7;border-radius:8px}
+.board-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.board-heading h3{margin:3px 0 0;font-size:17px;font-weight:600;color:#21272b}
+.active-task-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.active-task-card{min-width:0;padding:15px 16px;background:#fff;border-radius:7px;box-shadow:0 1px 3px rgba(33,39,43,.07)}
+.active-task-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.active-task-top strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:#21272b}
+.active-task-code{margin:6px 0 13px;color:#777;font-size:11px}
+.active-task-progress-meta,.active-task-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:#62676b}
+.active-task-progress-meta{margin-bottom:6px}
+.active-task-progress-meta b{color:#714b67;font-variant-numeric:tabular-nums}
+.active-task-card .progress-track{height:7px;background:#ece9ec;border-radius:20px}
+.active-task-bottom{margin-top:12px}
+.active-task-bottom a{color:#714b67;text-decoration:none;font-weight:600;white-space:nowrap}
+.active-task-empty{padding:18px;background:#fff;border-radius:7px;color:#777;font-size:12px}
+@media(max-width:720px){.active-task-grid{grid-template-columns:1fr}.board-heading{align-items:flex-start}.active-task-board{padding:14px}}
