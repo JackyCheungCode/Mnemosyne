@@ -7,7 +7,7 @@ const secretRaw=Deno.env.get("SUPABASE_SECRET_KEYS");
 const serviceKey=secretRaw?JSON.parse(secretRaw).default:Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const db=createClient(Deno.env.get("SUPABASE_URL")!,serviceKey!,{auth:{persistSession:false,autoRefreshToken:false}});
 const parse=(s:string)=>{try{return JSON.parse(s)}catch{return null}};
-function isOrganicRow(x:any){return !!x&&typeof x==="object"&&!!(x.link||x.url||x.href||x.destination||x.targetUrl||x.displayedUrl)&&!!(x.title||x.name||x.text)}
+function isOrganicRow(x:any){return !!x&&typeof x==="object"&&!!(x.link||x.url||x.href||x.destination||x.targetUrl||x.displayedUrl)&&!!(x.title||x.name||x.text||x.description||x.snippet||x.position||x.rank)}
 function organicOf(input:any,depth=0):any[]|null{
  if(depth>10||input==null)return null;
  let v=input;
@@ -34,7 +34,7 @@ function organicOf(input:any,depth=0):any[]|null{
   }
  }
  for(const [k,x] of Object.entries(v)){
-  if(["searchQuery","search_query","query","url","searchUrl","search_url","html","htmlSnapshot"].includes(k))continue;
+  if(["searchQuery","search_query","query","url","searchUrl","search_url","html","htmlSnapshot","paidResults","paid_results","paidProducts","relatedQueries","related_queries","peopleAlsoAsk","people_also_ask","shoppingResults","imageResults","videoResults","localResults","knowledgeGraph","siteLinks","sitelinks"].includes(k))continue;
   if(x&&typeof x==="object"){
    const nested=organicOf(x,depth+1);
    if(nested!==null)return nested;
