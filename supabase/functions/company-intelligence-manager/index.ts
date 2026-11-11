@@ -112,6 +112,20 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
  }
  if(b.action==="list_tasks"){const {data,error}=await db.from("company_intelligence_tasks").select("*").order("created_at",{ascending:false}).limit(100);if(error)throw error;return reply({tasks:data||[]});}
  if(b.action==="get_task"){const {data,error}=await db.from("company_intelligence_tasks").select("*,company_intelligence_items(*)").eq("task_code",String(b.taskCode||"")).single();if(error)return reply({error:"未找到情报采集任务"},404);return reply({task:data});}
+ if(b.action==="list_companies"){
+  const limit=Math.min(200,Math.max(1,Number(b.limit)||50)),page=Math.max(1,Number(b.page)||1);
+  let q=db.from("companies").select("id,company_name,description,country,address,emails,phones,social_links,main_products,profile_status,last_collected_at,created_at,company_websites(relationship_type,is_primary,websites(id,normalized_host,canonical_url,country,collection_status,last_collected_at)),company_intelligence_versions(id,collected_at,source_pages,snapshot)",{count:"exact"}).order("last_collected_at",{ascending:false}).range((page-1)*limit,page*limit-1);
+  if(b.keyword)q=q.ilike("company_name","%"+String(b.keyword).slice(0,100)+"%");
+  const {data,error,count}=await q;if(error)throw error;
+  let companies=data||[];
+  if(b.domain){const term=String(b.domain).toLowerCase().slice(0,100);companies=companies.filter((x:any)=>(x.company_websites||[]).some((cw:any)=>String(cw.websites?.normalized_host||"").includes(term)));}
+  return reply({companies,total:count||0,page,limit});
+ }
+ if(b.action==="get_company"){
+  const id=String(b.companyId||"");if(!id)return reply({error:"缺少企业档案编号"},400);
+  const {data,error}=await db.from("companies").select("*,company_websites(relationship_type,is_primary,created_at,websites(*)),company_intelligence_versions(id,website_id,task_id,snapshot,source_pages,collected_at)").eq("id",id).maybeSingle();
+  if(error)throw error;if(!data)return reply({error:"未找到企业档案"},404);return reply({company:data});
+ }
  if(b.action==="list_results"){const limit=Math.min(200,Math.max(1,Number(b.limit)||50)),page=Math.max(1,Number(b.page)||1);let q=db.from("company_intelligence_results").select("*",{count:"exact"}).order("created_at",{ascending:false}).range((page-1)*limit,page*limit-1);if(b.taskId)q=q.eq("task_id",String(b.taskId));if(b.domain)q=q.ilike("domain","%"+String(b.domain).slice(0,100)+"%");const {data,error,count}=await q;if(error)throw error;return reply({results:data||[],total:count||0,page,limit});}
  return reply({error:"未知操作"},400);
  }catch(e){console.error("company-intelligence-manager",e);return reply({error:String((e as Error)?.message||e).slice(0,500)},500)}});
