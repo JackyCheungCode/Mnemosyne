@@ -7,15 +7,63 @@ const secretRaw=Deno.env.get("SUPABASE_SECRET_KEYS");
 const serviceKey=secretRaw?JSON.parse(secretRaw).default:Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const db=createClient(Deno.env.get("SUPABASE_URL")!,serviceKey!,{auth:{persistSession:false,autoRefreshToken:false}});
 const parse=(s:string)=>{try{return JSON.parse(s)}catch{return null}};
-function organicOf(input:any,depth=0):any[]|null{if(depth>7||input==null)return null;let v=input;for(let i=0;i<5&&typeof v==="string";i++){const p=parse(v);if(p==null)break;v=p}if(Array.isArray(v)){if(v.some(x=>x&&(x.link||x.url||x.href)&&(x.title||x.name)))return v;for(const item of v){const nested=organicOf(item,depth+1);if(nested)return nested}return null}if(typeof v!=="object")return null;for(const k of ["organic","organic_results","organicResults","organicResultsList","nonPromotedSearchResults"]){const x=v[k];if(Array.isArray(x)&&x.some(y=>y&&(y.link||y.url||y.href)&&(y.title||y.name)))return x;if(x&&typeof x==="object"){const n=organicOf(x,depth+1);if(n)return n}}for(const k of ["serp","data","result","results","body","response","content","payload"]){const x=v[k];if(x&&typeof x==="object"){const n=organicOf(x,depth+1);if(n)return n}}return null}
+function isOrganicRow(x:any){return !!x&&typeof x==="object"&&!!(x.link||x.url||x.href||x.destination||x.targetUrl||x.displayedUrl)&&!!(x.title||x.name||x.text||x.description||x.snippet||x.position||x.rank)}
+function organicOf(input:any,depth=0):any[]|null{
+ if(depth>10||input==null)return null;
+ let v=input;
+ if(typeof v==="string"){const p=parse(v);if(p==null)return null;v=p}
+ if(Array.isArray(v)){
+  const rows=v.filter(isOrganicRow);
+  if(rows.length)return rows;
+  for(const item of v){const nested=organicOf(item,depth+1);if(nested!==null)return nested}
+  return null;
+ }
+ if(typeof v!=="object")return null;
+ for(const k of ["organicResults","organic_results","organic","organic_results_list","organicResultsList","nonPromotedSearchResults","organic_results_items"]){
+  if(Object.prototype.hasOwnProperty.call(v,k)){
+   const x=v[k];
+   if(Array.isArray(x))return x.filter(isOrganicRow);
+   const nested=organicOf(x,depth+1);
+   if(nested!==null)return nested;
+  }
+ }
+ for(const k of ["serp","data","result","results","body","response","content","payload","items","searchResults","search_results"]){
+  if(Object.prototype.hasOwnProperty.call(v,k)){
+   const nested=organicOf(v[k],depth+1);
+   if(nested!==null)return nested;
+  }
+ }
+ for(const [k,x] of Object.entries(v)){
+  if(["searchQuery","search_query","query","url","searchUrl","search_url","html","htmlSnapshot","paidResults","paid_results","paidProducts","relatedQueries","related_queries","peopleAlsoAsk","people_also_ask","shoppingResults","imageResults","videoResults","localResults","knowledgeGraph","siteLinks","sitelinks"].includes(k))continue;
+  if(x&&typeof x==="object"){
+   const nested=organicOf(x,depth+1);
+   if(nested!==null)return nested;
+  }else if(typeof x==="string"&&/^(organic|results|items|data|response|payload)/i.test(k)){
+   const nested=organicOf(x,depth+1);
+   if(nested!==null)return nested;
+  }
+ }
+ return null;
+}
+function schemaShape(input:any){
+ const root=Array.isArray(input)?input[0]:input;
+ const obj=root&&typeof root==="object"?root:{};
+ const arrays:Record<string,unknown>={};
+ for(const [k,v] of Object.entries(obj)){
+  if(Array.isArray(v))arrays[k]={type:"array",length:v.length,firstItemKeys:v[0]&&typeof v[0]==="object"?Object.keys(v[0]).slice(0,20):[]};
+  else if(typeof v==="string"&&/organic|result|item|data/i.test(k))arrays[k]={type:"string",preview:v.slice(0,160)};
+  else if(v&&typeof v==="object")arrays[k]={type:"object",keys:Object.keys(v as object).slice(0,20)};
+ }
+ return {rootType:Array.isArray(input)?"array":typeof input,rootLength:Array.isArray(input)?input.length:undefined,topLevelKeys:Object.keys(obj).slice(0,40),fields:arrays};
+}
 function resolveGoogle(raw:string){let current=String(raw||"").trim();for(let d=0;d<3;d++){let u:URL;try{u=new URL(current)}catch{return current}const h=u.hostname.toLowerCase().replace(/^www\./,"");if(!(h==="google.com"||h.endsWith(".google.com")))return current;let target="";for(const k of ["url","q","adurl","u","target"]){const value=u.searchParams.get(k);if(!value)continue;let c=value;for(let i=0;i<2;i++){try{c=decodeURIComponent(c)}catch{break}}try{const dest=new URL(c);if(["http:","https:"].includes(dest.protocol)&&!(dest.hostname==="google.com"||dest.hostname.endsWith(".google.com"))){target=dest.toString();break}}catch{}}if(!target)return "";current=target}return current}
-function normalize(x:any,i:number){const raw=x?.link||x?.url||x?.href||x?.destination||"";const url=resolveGoogle(raw);let domain="";try{domain=new URL(url).hostname.replace(/^www\./,"")}catch{}return{rank:Number(x?.global_rank||x?.position||x?.rank||i+1),title:String(x?.title||x?.name||""),url,domain,source_url:raw!==url?raw:null,description:String(x?.description||x?.snippet||x?.text||"")}}
+function normalize(x:any,i:number){const raw=x?.link||x?.url||x?.href||x?.destination||x?.targetUrl||x?.displayedUrl||"";const url=resolveGoogle(raw);let domain="";try{domain=new URL(url).hostname.replace(/^www\./,"")}catch{}return{rank:Number(x?.global_rank||x?.position||x?.rank||i+1),title:String(x?.title||x?.name||""),url,domain,source_url:raw!==url?raw:null,description:String(x?.description||x?.snippet||x?.text||"")}}
 async function claimSerpQuerySlot(zone:string,queryHash:string){const {data,error}=await db.rpc("claim_serp_query_slot",{p_zone:zone,p_query_hash:queryHash,p_cooldown_seconds:16});if(error)throw error;const row=Array.isArray(data)?data[0]:data;const wait=Number(row?.wait_seconds)||0;if(wait>0)await sleep(wait*1000+150)}
 async function fetchPage(url:string,token:string,queryHash:string,country:string,language:string){
  let last:any=null;for(let attempt=0;attempt<1;attempt++){try{
  await claimSerpQuerySlot("apify-google-search-scraper",queryHash);
  const response=await fetch("https://api.apify.com/v2/acts/apify~google-search-scraper/run-sync-get-dataset-items?clean=true&format=json",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({queries:url,maxPagesPerQuery:1,countryCode:(country||"us").toLowerCase(),languageCode:(language||"en").toLowerCase()}),signal:AbortSignal.timeout(105000)});
- const raw=await response.text(),parsed=parse(raw);if(response.ok){const items=organicOf(parsed??raw);if(items)return{items};last={code:"APIFY_SERP_SCHEMA_UNRECOGNIZED",status:response.status,preview:raw.slice(0,600)};if(attempt<2)continue;break}
+ const raw=await response.text(),parsed=parse(raw);if(response.ok){const items=organicOf(parsed??raw);if(items)return{items};last={code:"APIFY_SERP_SCHEMA_UNRECOGNIZED",status:response.status,shape:schemaShape(parsed),preview:raw.slice(0,600)};if(attempt<2)continue;break}
  last={code:response.status===401||response.status===403?"APIFY_AUTH_ERROR":response.status===429?"APIFY_RATE_LIMITED":"APIFY_HTTP_ERROR",status:response.status,message:String(parsed?.error?.message||parsed?.message||raw).slice(0,500),preview:raw.slice(0,400)};
  if(!(response.status===408||response.status===429||response.status>=500)||attempt===2)break;await sleep(Math.min(2000*(attempt+1),8000));
  }catch(e){last={code:"APIFY_NETWORK_ERROR",message:String((e as Error)?.message||e).slice(0,400)};if(attempt===2)break;await sleep(1000*(attempt+1))}}
