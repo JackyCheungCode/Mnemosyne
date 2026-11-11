@@ -360,3 +360,48 @@ body.sidebar-collapsed aside#app-sidebar nav a{height:38px}
 .result-filters .odoo-select{min-width:0}
 button,.btn,.text-btn,.odoo-select-trigger,.odoo-select-option{transition:background-color .14s ease,border-color .14s ease,color .14s ease,box-shadow .14s ease}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+
+/* Sidebar navigation must remain a single vertical column at every breakpoint.
+   Prevent earlier mobile nav-grid rules from turning the sidebar into a tile layout. */
+aside#app-sidebar nav,
+aside#app-sidebar nav[aria-label]{
+  display:flex!important;
+  flex:1 1 auto;
+  flex-direction:column!important;
+  flex-wrap:nowrap!important;
+  align-items:stretch;
+  justify-content:flex-start;
+  grid-template-columns:none!important;
+  grid-auto-flow:row!important;
+  width:100%;
+  min-width:0;
+}
+aside#app-sidebar nav>.nav-section{
+  display:flex!important;
+  flex-direction:column!important;
+  flex-wrap:nowrap!important;
+  align-items:stretch;
+  width:100%;
+  min-width:0;
+}
+aside#app-sidebar nav>.nav-section>a{
+  display:flex!important;
+  flex:0 0 36px;
+  width:100%;
+  min-width:0;
+  justify-content:flex-start;
+}
+@media(max-width:640px){
+  aside#app-sidebar nav,
+  aside#app-sidebar nav[aria-label]{
+    display:flex!important;
+    flex-direction:column!important;
+    flex-wrap:nowrap!important;
+    gap:12px;
+  }
+  aside#app-sidebar nav>.nav-section{
+    display:flex!important;
+    flex-direction:column!important;
+  }
+}
