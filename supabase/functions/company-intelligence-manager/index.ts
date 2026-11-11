@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS","Content-Type":"application/json","Cache-Control":"no-store"};
+const cors={"Access-Control-Allow-Origin":"https://mnemosyne-console.pages.dev","Access-Control-Allow-Headers":"authorization, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS","Content-Type":"application/json","Cache-Control":"no-store"};
 const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:cors});
 const secretRaw=Deno.env.get("SUPABASE_SECRET_KEYS");
 const serviceKey=secretRaw?JSON.parse(secretRaw).default:Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -34,16 +34,66 @@ async function crawl(item:any){
 }
 async function runTask(taskId:string){
  const {data:items}=await db.from("company_intelligence_items").select("*").eq("task_id",taskId).eq("status","queued").order("created_at");
- for(const item of items||[]){try{await db.from("company_intelligence_items").update({status:"crawling",started_at:new Date().toISOString(),error_message:null}).eq("id",item.id);const d=await crawl(item);await db.from("company_intelligence_items").update({status:"completed",pages_found:d.source_pages.length,pages_crawled:d.source_pages.length,company_data:d,completed_at:new Date().toISOString()}).eq("id",item.id);await db.from("company_intelligence_results").upsert({item_id:item.id,task_id:taskId,search_result_id:item.search_result_id,domain:item.domain,website_url:item.website_url,company_name:d.company_name,description:d.description,country:d.country,address:d.address,emails:d.emails,phones:d.phones,social_links:d.social_links,main_products:d.main_products,source_pages:d.source_pages,raw_data:d.raw_data},{onConflict:"item_id"});}catch(e){await db.from("company_intelligence_items").update({status:"failed",error_message:String((e as Error)?.message||e).slice(0,500),completed_at:new Date().toISOString()}).eq("id",item.id)}
+ for(const item of items||[]){try{await db.from("company_intelligence_items").update({status:"crawling",started_at:new Date().toISOString(),error_message:null}).eq("id",item.id);if(item.website_id)await db.from("websites").update({collection_status:"running",updated_at:new Date().toISOString()}).eq("id",item.website_id);const d=await crawl(item);await db.from("company_intelligence_items").update({status:"completed",pages_found:d.source_pages.length,pages_crawled:d.source_pages.length,company_data:d,completed_at:new Date().toISOString()}).eq("id",item.id);await db.from("company_intelligence_results").upsert({item_id:item.id,task_id:taskId,search_result_id:item.search_result_id,website_id:item.website_id||null,domain:item.domain,website_url:item.website_url,company_name:d.company_name,description:d.description,country:d.country,address:d.address,emails:d.emails,phones:d.phones,social_links:d.social_links,main_products:d.main_products,source_pages:d.source_pages,raw_data:d.raw_data},{onConflict:"item_id"});
+  if(item.website_id){
+   const {data:company,error:ce}=await db.from("companies").upsert({normalized_name:item.domain,company_name:d.company_name||item.title||item.domain,description:d.description||null,country:d.country||null,address:d.address||null,emails:d.emails||[],phones:d.phones||[],social_links:d.social_links||{},main_products:d.main_products||[],last_collected_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:"normalized_name"}).select("id").single();if(ce)throw ce;
+   const {error:linkError}=await db.from("company_websites").upsert({company_id:company.id,website_id:item.website_id,relationship_type:"primary",is_primary:true},{onConflict:"company_id,website_id"});if(linkError)throw linkError;
+   const {error:versionError}=await db.from("company_intelligence_versions").insert({company_id:company.id,website_id:item.website_id,task_id:taskId,snapshot:d,source_pages:d.source_pages||[],collected_at:new Date().toISOString()});if(versionError)throw versionError;
+   const {error:websiteError}=await db.from("websites").update({collection_status:"completed",last_collected_at:new Date().toISOString(),display_name:d.company_name||item.title,updated_at:new Date().toISOString()}).eq("id",item.website_id);if(websiteError)throw websiteError;
+  }}catch(e){await db.from("company_intelligence_items").update({status:"failed",error_message:String((e as Error)?.message||e).slice(0,500),completed_at:new Date().toISOString()}).eq("id",item.id);if(item.website_id)await db.from("websites").update({collection_status:"failed",updated_at:new Date().toISOString()}).eq("id",item.website_id)}
  const {data:progress}=await db.from("company_intelligence_items").select("status").eq("task_id",taskId);const done=(progress||[]).filter(x=>["completed","partial"].includes(x.status)).length,failed=(progress||[]).filter(x=>x.status==="failed").length;await db.from("company_intelligence_tasks").update({completed_items:done,failed_items:failed,total_items:(progress||[]).length}).eq("id",taskId);
 }
  const {data:all}=await db.from("company_intelligence_items").select("status").eq("task_id",taskId);const total=(all||[]).length,completed=(all||[]).filter(x=>["completed","partial"].includes(x.status)).length,failed=(all||[]).filter(x=>x.status==="failed").length;
  await db.from("company_intelligence_tasks").update({status:failed?(completed?"partial":"failed"):"completed",total_items:total,completed_items:completed,failed_items:failed,completed_at:new Date().toISOString(),error_summary:failed?failed+" 家官网采集失败":null}).eq("id",taskId);
 }
-Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{headers:cors});if(req.method!=="POST")return reply({error:"Method not allowed"},405);try{const b=await req.json();
- if(b.action==="list_candidates"){let q=db.from("search_results").select("id,keyword,country,title,url,domain,description,discovered_at,search_tasks!inner(task_code)").order("discovered_at",{ascending:false}).limit(500);if(b.taskCode)q=q.eq("search_tasks.task_code",String(b.taskCode));if(b.keyword)q=q.ilike("keyword","%"+String(b.keyword).slice(0,100)+"%");if(b.domain)q=q.ilike("domain","%"+String(b.domain).slice(0,100)+"%");const {data,error}=await q;if(error)throw error;const ids=(data||[]).map(x=>x.id);const {data:decisions}=ids.length?await db.from("company_review_selections").select("search_result_id,decision").in("search_result_id",ids):{data:[]};const map=new Map((decisions||[]).map(x=>[x.search_result_id,x.decision]));return reply({candidates:(data||[]).map(x=>({...x,review_status:map.get(x.id)||"pending"}))});}
- if(b.action==="save_review"){const rows=(b.items||[]).filter((x:any)=>x&&typeof x.id==="string"&&["approved","rejected","pending"].includes(x.decision)).map((x:any)=>({search_result_id:x.id,decision:x.decision,updated_at:new Date().toISOString()}));if(!rows.length)return reply({error:"没有可保存的审核记录"},400);const {error}=await db.from("company_review_selections").upsert(rows,{onConflict:"search_result_id"});if(error)throw error;return reply({saved:rows.length});}
- if(b.action==="create_task"){const ids=[...new Set((b.ids||[]).filter((x:any)=>typeof x==="string"))];if(!ids.length||ids.length>100)return reply({error:"请选择 1–100 个官网"},400);const {data:approved,error:ae}=await db.from("company_review_selections").select("search_result_id").in("search_result_id",ids).eq("decision","approved");if(ae)throw ae;const allowed=new Set((approved||[]).map(x=>x.search_result_id));if(allowed.size!==ids.length)return reply({error:"所选官网中存在未审核通过的记录，请先保存审核结果"},409);const {data:found,error:fe}=await db.from("search_results").select("id,title,url,domain").in("id",ids);if(fe)throw fe;if((found||[]).length!==ids.length)return reply({error:"部分搜索结果已不存在，请刷新列表"},409);const {data:t,error}=await db.from("company_intelligence_tasks").insert({task_name:String(b.taskName||"官网情报采集").slice(0,120),status:"running",total_items:ids.length,started_at:new Date().toISOString()}).select("*").single();if(error)throw error;const rows=(found||[]).map(x=>({task_id:t.id,search_result_id:x.id,domain:x.domain,website_url:x.url,title:x.title,status:"queued"}));const {error:ie}=await db.from("company_intelligence_items").insert(rows);if(ie)throw ie;EdgeRuntime.waitUntil(runTask(t.id));return reply({task:t,selected:ids.length,message:"已创建官网情报采集任务"},202);}
+const authClient=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_ANON_KEY")!,{auth:{persistSession:false,autoRefreshToken:false}});
+async function requireAdmin(req:Request){
+ const header=req.headers.get("Authorization")||"";
+ const match=header.match(/^Bearer\s+(.+)$/i);
+ if(!match)return false;
+ const {data,error}=await authClient.auth.getUser(match[1]);
+ if(error||!data.user||data.user.email?.toLowerCase()!=="xg.y@icloud.com")return false;
+ const {data:admin,error:adminError}=await db.from("admin_users").select("user_id").eq("user_id",data.user.id).eq("is_active",true).maybeSingle();
+ return !adminError&&!!admin;
+}
+Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{headers:cors});if(req.method!=="POST")return reply({error:"Method not allowed"},405);try{if(!await requireAdmin(req))return reply({error:"管理员身份验证失败，请重新登录",code:"ADMIN_AUTH_REQUIRED"},401);const b=await req.json();
+ if(b.action==="list_candidates"){
+  const {data:websites,error}=await db.from("websites").select("id,normalized_host,display_name,canonical_url,country,review_status,review_reason,collection_status,first_discovered_at,last_discovered_at,last_collected_at").order("last_discovered_at",{ascending:false}).limit(1000);
+  if(error)throw error;
+  const ids=(websites||[]).map(x=>x.id);
+  const {data:discoveries,error:de}=ids.length?await db.from("website_discoveries").select("website_id,search_result_id,search_task_id,keyword,country,language,original_url,source_url,title,snippet,discovered_at").in("website_id",ids).order("discovered_at",{ascending:false}).limit(5000):{data:[],error:null};
+  if(de)throw de;
+  const grouped=new Map();for(const d of discoveries||[]){if(!grouped.has(d.website_id))grouped.set(d.website_id,[]);grouped.get(d.website_id).push(d)}
+  let candidates=(websites||[]).map(w=>{const sources=grouped.get(w.id)||[],latest=sources[0]||{};return{id:w.id,title:w.display_name||latest.title||w.normalized_host,domain:w.normalized_host,url:w.canonical_url||latest.original_url||("https://"+w.normalized_host),country:w.country||latest.country||"",keyword:latest.keyword||"",description:latest.snippet||"",discovered_at:w.last_discovered_at||latest.discovered_at,review_status:w.review_status,review_reason:w.review_reason,collection_status:w.collection_status,source_count:sources.length,sources};});
+  const term=String(b.keyword||b.domain||"").trim().toLowerCase();if(term)candidates=candidates.filter(x=>[x.title,x.domain,x.keyword,x.description,...x.sources.map(s=>s.keyword)].some(v=>String(v||"").toLowerCase().includes(term)));
+  return reply({candidates});
+ }
+ if(b.action==="save_review"){
+  const rows=(b.items||[]).filter((x:any)=>x&&typeof x.id==="string"&&["approved","rejected","pending"].includes(x.decision));
+  if(!rows.length)return reply({error:"没有可保存的审核记录"},400);
+  let saved=0;for(const row of rows){
+   const {data:website,error:we}=await db.from("websites").select("id").eq("id",row.id).maybeSingle();if(we)throw we;if(!website)continue;
+   const reason=row.decision==="rejected"?String(row.reason||"").slice(0,200):null;
+   const {error:ue}=await db.from("websites").update({review_status:row.decision,review_reason:reason,updated_at:new Date().toISOString()}).eq("id",row.id);if(ue)throw ue;
+   const {error:he}=await db.from("website_reviews").insert({website_id:row.id,decision:row.decision,reason,reviewed_at:new Date().toISOString()});if(he)throw he;
+   saved++;
+  }
+  return reply({saved});
+ }
+ if(b.action==="create_task"){
+  const ids=[...new Set((b.ids||[]).filter((x:any)=>typeof x==="string"))];if(!ids.length||ids.length>100)return reply({error:"请选择 1–100 个官网"},400);
+  const {data:websites,error:we}=await db.from("websites").select("id,normalized_host,display_name,canonical_url,review_status,collection_status").in("id",ids);if(we)throw we;
+  if((websites||[]).length!==ids.length)return reply({error:"部分官网已不存在，请刷新列表"},409);
+  if((websites||[]).some(w=>w.review_status!=="approved"))return reply({error:"所选网站中存在未审核通过的官网，请先完成审核"},409);
+  const {data:discoveryRows,error:de}=await db.from("website_discoveries").select("website_id,search_result_id,original_url,title,discovered_at").in("website_id",ids).order("discovered_at",{ascending:false});if(de)throw de;
+  const latest=new Map();for(const d of discoveryRows||[])if(!latest.has(d.website_id))latest.set(d.website_id,d);
+  if(ids.some(id=>!latest.has(id)))return reply({error:"部分网站缺少搜索来源记录，暂不能采集"},409);
+  const {data:t,error}=await db.from("company_intelligence_tasks").insert({task_name:String(b.taskName||"官网采集批次").slice(0,120),status:"running",total_items:ids.length,started_at:new Date().toISOString()}).select("*").single();if(error)throw error;
+  const rows=(websites||[]).map(w=>{const d=latest.get(w.id);return{task_id:t.id,search_result_id:d.search_result_id,website_id:w.id,domain:w.normalized_host,website_url:w.canonical_url||d.original_url,title:w.display_name||d.title||w.normalized_host,status:"queued"}});
+  const {error:ie}=await db.from("company_intelligence_items").insert(rows);if(ie)throw ie;
+  const {error:ue}=await db.from("websites").update({collection_status:"queued",updated_at:new Date().toISOString()}).in("id",ids);if(ue)throw ue;
+  EdgeRuntime.waitUntil(runTask(t.id));return reply({task:t,selected:ids.length,message:"已创建官网采集批次"},202);
+ }
  if(b.action==="list_tasks"){const {data,error}=await db.from("company_intelligence_tasks").select("*").order("created_at",{ascending:false}).limit(100);if(error)throw error;return reply({tasks:data||[]});}
  if(b.action==="get_task"){const {data,error}=await db.from("company_intelligence_tasks").select("*,company_intelligence_items(*)").eq("task_code",String(b.taskCode||"")).single();if(error)return reply({error:"未找到情报采集任务"},404);return reply({task:data});}
  if(b.action==="list_results"){const limit=Math.min(200,Math.max(1,Number(b.limit)||50)),page=Math.max(1,Number(b.page)||1);let q=db.from("company_intelligence_results").select("*",{count:"exact"}).order("created_at",{ascending:false}).range((page-1)*limit,page*limit-1);if(b.taskId)q=q.eq("task_id",String(b.taskId));if(b.domain)q=q.ilike("domain","%"+String(b.domain).slice(0,100)+"%");const {data,error,count}=await q;if(error)throw error;return reply({results:data||[],total:count||0,page,limit});}
