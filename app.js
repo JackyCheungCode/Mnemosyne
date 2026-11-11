@@ -141,7 +141,7 @@ function drawRules(){
 drawRules();
 }
 function safe(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-page();
+initAuth();
 async function renderVerify(){
  let candidates=[];try{candidates=JSON.parse(localStorage.getItem('mnemosyne_candidates')||'[]')||[]}catch{}
  app.innerHTML=`<div class="eyebrow">DISCOVERY / VERIFICATION</div><h1 class="title">候选企业验证</h1><p class="desc">对 Google SERP 返回的网站进行访问和初步身份识别。验证结果是机器辅助判断，不会把无法确认的网站自动认定为企业官网。</p>
