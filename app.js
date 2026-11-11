@@ -151,3 +151,52 @@ function renderIntelligenceResults(){
  async function load(){try{const d=await intelligenceApi({action:'list_results',domain:document.querySelector('#ci-domain').value,page:pageNo,limit:50});rows.innerHTML=d.results.length?d.results.map(x=>'<tr><td><strong>'+safe(x.company_name||'待识别')+'</strong><small>'+safe(x.description||'')+'</small></td><td><a href="'+safe(x.website_url)+'" target="_blank" rel="noopener">'+safe(x.domain)+'</a></td><td>'+safe([x.country,x.address].filter(Boolean).join(' · ')||'—')+'</td><td>'+safe((x.emails||[]).join(' / ')||'—')+'</td><td>'+safe((x.phones||[]).join(' / ')||'—')+'</td><td>'+Object.entries(x.social_links||{}).map(([k,v])=>'<a href="'+safe(v)+'" target="_blank" rel="noopener">'+safe(k)+'</a>').join(' ')+'</td><td>'+safe((x.main_products||[]).join('、')||'—')+'</td><td>'+((x.source_pages||[]).map(p=>'<a href="'+safe(p.url)+'" target="_blank" rel="noopener">'+safe(p.title||new URL(p.url).pathname||'官网页面')+'</a>').join(' · '))+'</td></tr>').join(''):'<tr><td colspan="8" class="empty-state">暂无企业情报结果。请先审核并启动官网采集。</td></tr>';document.querySelector('#ci-result-total').textContent='共 '+d.total+' 家企业';document.querySelector('#ci-result-pagination').innerHTML='<button class="btn secondary" id="ci-prev" '+(pageNo<=1?'disabled':'')+'>上一页</button><span>第 '+d.page+' 页</span><button class="btn secondary" id="ci-next" '+(pageNo*50>=d.total?'disabled':'')+'>下一页</button>';document.querySelector('#ci-prev').onclick=()=>{pageNo=Math.max(1,pageNo-1);load()};document.querySelector('#ci-next').onclick=()=>{pageNo++;load()}}catch(e){rows.innerHTML='<tr><td colspan="8">'+safe(e.message)+'</td></tr>'}}
  document.querySelector('#ci-result-search').onclick=()=>{pageNo=1;load()};load();
 }
+
+
+/* Odoo-style accessible dropdown controls for every application select */
+(function initOdooSelects(){
+ const enhance=(select)=>{
+  if(!(select instanceof HTMLSelectElement)||select.multiple||select.dataset.odooEnhanced)return;
+  select.dataset.odooEnhanced='1';
+  const wrap=document.createElement('div');wrap.className='odoo-select';
+  const button=document.createElement('button');button.type='button';button.className='odoo-select-trigger';button.setAttribute('role','combobox');button.setAttribute('aria-haspopup','listbox');button.setAttribute('aria-expanded','false');
+  const label=document.createElement('span');label.className='odoo-select-value';
+  const chevron=document.createElement('span');chevron.className='odoo-select-chevron';chevron.setAttribute('aria-hidden','true');chevron.textContent='⌄';
+  button.append(label,chevron);
+  const menu=document.createElement('div');menu.className='odoo-select-menu';menu.setAttribute('role','listbox');menu.hidden=true;
+  wrap.append(button,menu);select.parentNode.insertBefore(wrap,select);wrap.append(select);select.classList.add('odoo-native-select');
+  let active=-1;
+  const options=()=>Array.from(select.options);
+  const sync=()=>{
+   const opts=options(),selected=opts[select.selectedIndex];
+   label.textContent=selected?.textContent?.trim()||'请选择';
+   button.disabled=select.disabled;button.setAttribute('aria-label',label.textContent);button.setAttribute('aria-expanded',String(!menu.hidden));
+   menu.replaceChildren();
+   opts.forEach((option,index)=>{
+    if(option.hidden)return;
+    const item=document.createElement('button');item.type='button';item.className='odoo-select-option';item.setAttribute('role','option');item.setAttribute('aria-selected',String(index===select.selectedIndex));item.disabled=option.disabled;
+    item.textContent=option.textContent.trim();
+    if(option.disabled&&option.value==='')item.classList.add('is-placeholder');
+    item.addEventListener('click',()=>{if(option.disabled)return;select.selectedIndex=index;select.dispatchEvent(new Event('change',{bubbles:true}));sync();close();button.focus()});
+    menu.append(item);
+   });
+  };
+  const close=()=>{menu.hidden=true;wrap.classList.remove('is-open');button.setAttribute('aria-expanded','false')};
+  const open=()=>{if(button.disabled)return;sync();menu.hidden=false;wrap.classList.add('is-open');button.setAttribute('aria-expanded','true');const selected=menu.querySelector('[aria-selected="true"]');if(selected)selected.scrollIntoView({block:'nearest'})};
+  button.addEventListener('click',()=>menu.hidden?open():close());
+  button.addEventListener('keydown',e=>{
+   const items=Array.from(menu.querySelectorAll('.odoo-select-option:not(:disabled)'));
+   if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(menu.hidden)open();if(!items.length)return;active=Math.max(0,items.indexOf(document.activeElement)+(e.key==='ArrowDown'?1:-1));active=Math.min(items.length-1,active);items[active].focus()}
+   else if(e.key==='Enter'||e.key===' '){if(menu.hidden){e.preventDefault();open()}else if(document.activeElement.classList.contains('odoo-select-option')){e.preventDefault();document.activeElement.click()}}
+   else if(e.key==='Escape'){close();button.focus()}
+  });
+  menu.addEventListener('keydown',e=>{const items=Array.from(menu.querySelectorAll('.odoo-select-option:not(:disabled)')),i=items.indexOf(document.activeElement);if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();items[Math.max(0,Math.min(items.length-1,i+(e.key==='ArrowDown'?1:-1)))]?.focus()}else if(e.key==='Escape'){close();button.focus()}else if(e.key==='Home'){e.preventDefault();items[0]?.focus()}else if(e.key==='End'){e.preventDefault();items.at(-1)?.focus()}});
+  select.addEventListener('change',sync);
+  const observer=new MutationObserver(sync);observer.observe(select,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','label','value']});
+  document.addEventListener('click',e=>{if(!wrap.contains(e.target))close()});
+  sync();
+ };
+ const scan=root=>{if(root.matches?.('select'))enhance(root);root.querySelectorAll?.('select').forEach(enhance)};
+ scan(document);
+ new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{if(node.nodeType===1)scan(node)}))).observe(document.body,{childList:true,subtree:true});
+})();
