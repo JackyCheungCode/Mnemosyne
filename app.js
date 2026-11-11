@@ -1,4 +1,25 @@
 const app=document.querySelector('#app');
+/* Odoo-inspired responsive application navigation */
+(function initSidebar(){
+ const sidebar=document.getElementById('app-sidebar'),collapse=document.getElementById('sidebar-collapse'),open=document.getElementById('sidebar-open'),scrim=document.getElementById('sidebar-scrim');
+ if(!sidebar||!collapse||!open||!scrim)return;
+ const mobile=()=>window.matchMedia('(max-width:640px)').matches;
+ let collapsed=false;try{collapsed=localStorage.getItem('mnemosyne_sidebar_collapsed')==='1'}catch{}
+ document.body.classList.toggle('sidebar-collapsed',collapsed&&!mobile());
+ const closeMobile=()=>document.body.classList.remove('sidebar-mobile-open');
+ collapse.addEventListener('click',()=>{
+  if(mobile()){closeMobile();return}
+  collapsed=!document.body.classList.contains('sidebar-collapsed');
+  document.body.classList.toggle('sidebar-collapsed',collapsed);
+  try{localStorage.setItem('mnemosyne_sidebar_collapsed',collapsed?'1':'0')}catch{}
+  collapse.setAttribute('aria-label',collapsed?'展开侧边栏':'收起侧边栏');collapse.title=collapsed?'展开侧边栏':'收起侧边栏';
+ });
+ open.addEventListener('click',()=>document.body.classList.add('sidebar-mobile-open'));
+ scrim.addEventListener('click',closeMobile);
+ sidebar.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',closeMobile));
+ window.addEventListener('resize',()=>{if(!mobile())closeMobile()});
+})();
+
 const DEFAULT_RULES={shop:['amazon.com','aliexpress.com','ebay.com','walmart.com'],social:['linkedin.com','facebook.com','instagram.com','youtube.com','x.com'],b2b:['globalsources.com','indiamart.com','kompass.com','thomasnet.com'],media:['reuters.com','bloomberg.com','forbes.com','prnewswire.com']};
 const LABELS={shop:'电商平台',social:'社交媒体',b2b:'B2B 平台',media:'资讯媒体'};
 let cfg={};try{cfg=JSON.parse(localStorage.getItem('mnemosyne_cfg')||'{}')||{}}catch{}
