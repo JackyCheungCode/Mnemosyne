@@ -86,7 +86,7 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
   const {data:websites,error:we}=await db.from("websites").select("id,normalized_host,display_name,canonical_url,review_status,collection_status").in("id",ids);if(we)throw we;
   if((websites||[]).length!==ids.length)return reply({error:"部分官网已不存在，请刷新列表"},409);
   if((websites||[]).some(w=>w.review_status!=="approved"))return reply({error:"所选网站中存在未审核通过的官网，请先完成审核"},409);
-  const {data:discoveryRows,error:de}=await db.from("website_discoveries").select("website_id,search_result_id,original_url,title,discovered_at").in("website_id",ids).order("discovered_at",{ascending:false});if(de)throw de;
+  const {data:discoveryRows,error:de}=await db.from("website_discoveries").select("website_id,search_result_id,search_task_id,original_url,title,discovered_at").in("website_id",ids).order("discovered_at",{ascending:false});if(de)throw de;
   const latest=new Map();for(const d of discoveryRows||[])if(!latest.has(d.website_id))latest.set(d.website_id,d);
   if(ids.some(id=>!latest.has(id)))return reply({error:"部分网站缺少搜索来源记录，暂不能采集"},409);
   let sourceSearchTaskId=null;const sourceSearchTaskCode=String(b.searchTaskCode||"").trim();if(sourceSearchTaskCode){const {data:sourceTask,error:st}=await db.from("search_tasks").select("id").eq("task_code",sourceSearchTaskCode).maybeSingle();if(st)throw st;if(!sourceTask)return reply({error:"未找到对应的搜索任务"},404);sourceSearchTaskId=sourceTask.id;const selectedIds=new Set(ids);const sourceRows=(discoveryRows||[]).filter(x=>selectedIds.has(x.website_id));if(sourceRows.some(x=>x.search_task_id!==sourceSearchTaskId))return reply({error:"所选官网并非全部来自当前搜索任务"},409);}
