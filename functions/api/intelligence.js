@@ -5,7 +5,7 @@ export async function onRequestPost({request}){
  let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}
  const actions=["list_candidates","save_review","create_task","list_tasks","get_task","list_results"];
  if(!actions.includes(String(body.action||"")))return json({error:"不支持的操作"},400);
- try{const headers={"Authorization":"Bearer "+SUPABASE_ANON_KEY,"apikey":SUPABASE_ANON_KEY,"Content-Type":"application/json"};
+ try{const headers={"Authorization":auth,"apikey":SUPABASE_ANON_KEY,"Content-Type":"application/json"};
  const upstream=await fetch(SUPABASE_URL+"/functions/v1/company-intelligence-manager",{method:"POST",headers,body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
  const raw=await upstream.text();let data;try{data=JSON.parse(raw)}catch{data={error:raw.slice(0,500)}}return json(data,upstream.status)
  }catch(e){return json({error:"情报采集服务暂时不可用："+String(e?.message||e).slice(0,180)},502)}
