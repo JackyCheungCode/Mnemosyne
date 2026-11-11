@@ -405,3 +405,51 @@ aside#app-sidebar nav>.nav-section>a{
     flex-direction:column!important;
   }
 }
+
+
+/* Odoo 20 brand palette: plum primary, teal secondary, warm neutral surfaces. */
+:root{
+ --brand:#714B67;--brand-hover:#5f3e56;--brand-soft:#f2eaf0;
+ --blue:#714B67;--blue-dark:#5f3e56;
+ --ink:#21272b;--muted:#6b6d70;--subtle:#8f8f8f;
+ --line:#e8e4e7;--line-strong:#d7cbd4;--surface:#fff;--canvas:#f8f7f8;--soft:#f3eff2;
+ --odoo-teal:#017e84;--odoo-teal-light:#00a09d;--odoo-orange:#e4a900;--odoo-coral:#e46e78;
+}
+a{color:var(--brand)}
+a:hover{color:var(--brand-hover)}
+.brand{color:var(--brand)!important}
+.brand-mark{
+ width:30px;height:30px;display:grid;grid-template-columns:repeat(2,1fr);
+ grid-template-rows:repeat(2,1fr);gap:2px;padding:4px;border-radius:8px;
+ background:#f5eff4;flex:none;
+}
+.brand-mark i{display:block;border-radius:4px}
+.brand-mark i:nth-child(1){background:#714b67}
+.brand-mark i:nth-child(2){background:#00a09d}
+.brand-mark i:nth-child(3){background:#e4a900}
+.brand-mark i:nth-child(4){background:#e46e78}
+aside#app-sidebar nav a.active{background:#f2eaf0;color:#714b67}
+aside#app-sidebar nav a.active .nav-icon{color:#714b67}
+.btn{background:#714b67;box-shadow:0 1px 2px rgba(113,75,103,.18)}
+.btn:hover{background:#5f3e56;box-shadow:0 2px 5px rgba(113,75,103,.2)}
+.btn.secondary{background:#f3eff2;color:#51424d;border-color:#e8e0e6}
+.btn.secondary:hover{background:#eae1e8;color:#714b67}
+.field input:focus,.field select:focus,.result-filters input:focus,.result-filters select:focus,.review-filters input:focus{
+ border-color:#9a7890;box-shadow:0 0 0 2px rgba(113,75,103,.12)
+}
+.checks input,.select-all input,.review-check,.verify-table input{accent-color:#714b67}
+.progress-track i,.ci-progress i,.ci-mini-track i{background:linear-gradient(90deg,#714b67,#017e84)}
+.progress-meta b,.ci-progress-caption b{color:#714b67}
+.review-count{background:#714b67}
+.odoo-select-trigger:focus-visible{outline:2px solid rgba(113,75,103,.2);border-color:#9a7890}
+.odoo-select-option[aria-selected=true]{background:#f2eaf0;color:#714b67}
+.odoo-select-option:hover,.odoo-select-option:focus{background:#f7f2f6}
+.country-option,.odoo-select-value{display:flex;align-items:center;gap:9px}
+.country-flag-circle{
+ width:22px;height:22px;min-width:22px;border-radius:50%;overflow:hidden;
+ display:inline-flex;align-items:center;justify-content:center;
+ background:#fff;border:1px solid rgba(33,39,43,.10);
+ box-shadow:0 1px 2px rgba(33,39,43,.08);font-size:15px;line-height:1;
+}
+.country-option{min-height:36px}
+.country-option span:last-child,.odoo-select-value span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
