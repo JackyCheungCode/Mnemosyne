@@ -116,12 +116,20 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
  if(b.action==="get_task"){const {data,error}=await db.from("company_intelligence_tasks").select("*,company_intelligence_items(*)").eq("task_code",String(b.taskCode||"")).single();if(error)return reply({error:"未找到情报采集任务"},404);return reply({task:data});}
  if(b.action==="list_companies"){
   const limit=Math.min(200,Math.max(1,Number(b.limit)||50)),page=Math.max(1,Number(b.page)||1);
-  const {data,error}=await db.from("companies").select("id,company_name,description,country,address,emails,phones,social_links,main_products,profile_status,last_collected_at,created_at,company_websites(relationship_type,is_primary,websites(id,normalized_host,canonical_url,country,collection_status,last_collected_at))").order("last_collected_at",{ascending:false}).limit(1000);
+  let companyQuery=db.from("companies").select("id,company_name,description,country,address,emails,phones,social_links,main_products,profile_status,verification_status,verification_notes,verified_at,last_collected_at,created_at,company_websites(relationship_type,is_primary,websites(id,normalized_host,canonical_url,country,collection_status,last_collected_at))").order("last_collected_at",{ascending:false}).limit(1000);if(b.verifiedOnly)companyQuery=companyQuery.eq("verification_status","verified");if(b.verificationStatus)companyQuery=companyQuery.eq("verification_status",String(b.verificationStatus));const {data,error}=await companyQuery;
   if(error)throw error;
   const term=String(b.keyword||b.domain||"").trim().toLowerCase();
   const filtered=(data||[]).filter((x:any)=>!term||String(x.company_name||"").toLowerCase().includes(term)||(x.company_websites||[]).some((cw:any)=>String(cw.websites?.normalized_host||"").toLowerCase().includes(term)));
   const total=filtered.length,companies=filtered.slice((page-1)*limit,page*limit);
   return reply({companies,total,page,limit});
+ }
+ if(b.action==="verify_company"){
+  const companyId=String(b.companyId||"");const decision=String(b.decision||"");
+  if(!companyId||!["verified","rejected","pending"].includes(decision))return reply({error:"请指定企业和有效的验证结论"},400);
+  const notes=String(b.notes||"").trim().slice(0,2000);
+  const {data:company,error:ce}=await db.from("companies").select("id").eq("id",companyId).maybeSingle();if(ce)throw ce;if(!company)return reply({error:"未找到企业档案"},404);
+  const {error:ue}=await db.from("companies").update({verification_status:decision,verification_notes:notes||null,verified_at:decision==="verified"?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq("id",companyId);if(ue)throw ue;
+  return reply({saved:true,verification_status:decision});
  }
  if(b.action==="get_company"){
   const id=String(b.companyId||"");if(!id)return reply({error:"缺少企业档案编号"},400);
