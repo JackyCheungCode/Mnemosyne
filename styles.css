@@ -89,6 +89,22 @@ nav{display:flex;flex-direction:column;gap:22px}
 
 .select-all{font-size:12px;color:#3c4043;display:flex;align-items:center;gap:8px}
 .select-all input,.review-check{accent-color:#1a73e8;width:16px;height:16px}
+
+.website-registry-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.website-registry-head h3{margin:0 0 6px}
+.website-registry-filters{display:grid;grid-template-columns:minmax(220px,1fr) 190px auto;gap:10px;margin:16px 0}
+.website-registry-filters input,.website-registry-filters select{height:40px;min-width:0;border:1px solid #dadce0;border-radius:8px;padding:0 12px;background:#fff;color:#21272b;font:13px inherit}
+.website-registry-summary{display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:12px 0;border-top:1px solid #edf0f2;color:#6b7280;font-size:12px}
+.website-registry-summary b{color:#21272b;font-size:14px;font-variant-numeric:tabular-nums;margin-left:4px}
+.website-registry-table{min-width:1120px}
+.website-registry-table td:first-child strong{display:block;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.website-registry-table td:first-child small,.website-registry-table td:nth-child(3) small,.website-registry-table td:nth-child(4) small{display:block;margin-top:4px;color:#6b7280}
+.website-source-detail>td{background:#f8f9fa;padding:14px 18px}
+.website-source-title{font-size:12px;font-weight:600;color:#4b5563;margin-bottom:10px}
+.website-source-detail .table{min-width:850px;background:#fff}
+.website-source-detail .table th,.website-source-detail .table td{height:38px}
+.website-sources-toggle{white-space:nowrap}
+@media(max-width:760px){.website-registry-head{align-items:flex-start;flex-direction:column}.website-registry-filters{grid-template-columns:1fr 1fr}.website-registry-filters input{grid-column:1/-1}.website-registry-filters button{grid-column:1/-1}}
 .company-review-table{min-width:1100px}
 .company-review-table th:nth-child(1),.company-review-table td:nth-child(1){width:48px;text-align:center}
 .company-review-table th:nth-child(2),.company-review-table td:nth-child(2){width:260px}
