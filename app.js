@@ -1,3 +1,43 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const SUPABASE_URL="https://gvbqtdxqulbnjqnbooqs.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2YnF0ZHhxdWxibmpxbmJvb3FzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzMTcyNjQsImV4cCI6MjEwOTg5MzI2NH0.q7LQJ_h113dvv0cl9HQoEcXM-wWBu2jviPbreop14mE";
+const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+window.__mnSession=null;
+const nativeFetch=window.fetch.bind(window);
+window.fetch=(input,init={})=>{
+ const url=typeof input==="string"?input:input.url;
+ if(url.startsWith("/api/")&&window.__mnSession?.access_token){
+  const headers=new Headers(init.headers|| (input instanceof Request?input.headers:undefined));
+  headers.set("Authorization","Bearer "+window.__mnSession.access_token);
+  return nativeFetch(input,{...init,headers});
+ }
+ return nativeFetch(input,init);
+};
+async function initAuth(){
+ const {data:{session}}=await supabase.auth.getSession();
+ if(session){window.__mnSession=session;page();showLogout();return}
+ renderLogin();
+}
+function renderLogin(message=""){
+ const host=document.querySelector("#app");
+ host.innerHTML='<section class="panel" style="max-width:460px;margin:8vh auto;padding:32px"><div class="eyebrow">MNEMOSYNE / SECURE ACCESS</div><h1 class="title">管理员登录</h1><p class="desc">使用已授权的管理员邮箱登录工作空间。</p><form id="mn-login"><div class="field"><label for="mn-email">邮箱</label><input id="mn-email" type="email" autocomplete="username" required value="xg.y@icloud.com"></div><div class="field"><label for="mn-password">密码</label><input id="mn-password" type="password" autocomplete="current-password" required></div><p id="mn-auth-error" class="toast" role="alert">'+escapeAuth(message)+'</p><button class="btn" style="width:100%" type="submit">登录</button></form></section>';
+ document.querySelector("#mn-login").addEventListener("submit",async e=>{
+  e.preventDefault();const button=e.currentTarget.querySelector("button");button.disabled=true;button.textContent="正在验证…";
+  const email=document.querySelector("#mn-email").value.trim(),password=document.querySelector("#mn-password").value;
+  const {data,error}=await supabase.auth.signInWithPassword({email,password});
+  if(error){document.querySelector("#mn-auth-error").textContent="登录失败："+error.message;button.disabled=false;button.textContent="登录";return}
+  const {data:{user}}=await supabase.auth.getUser();
+  if(!user||user.email?.toLowerCase()!=="xg.y@icloud.com"){await supabase.auth.signOut();document.querySelector("#mn-auth-error").textContent="此账户没有管理员权限。";button.disabled=false;button.textContent="登录";return}
+  window.__mnSession=data.session;page();showLogout();
+ });
+}
+function escapeAuth(s){return String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function showLogout(){
+ const header=document.querySelector("header");if(!header||document.querySelector("#mn-logout"))return;
+ const btn=document.createElement("button");btn.id="mn-logout";btn.className="btn secondary";btn.type="button";btn.textContent="退出登录";btn.style.marginLeft="12px";
+ btn.onclick=async()=>{await supabase.auth.signOut();window.__mnSession=null;btn.remove();renderLogin()};
+ header.append(btn);
+}
 const app=document.querySelector('#app');
 /* Odoo-inspired responsive application navigation */
 (function initSidebar(){
@@ -39,7 +79,7 @@ let refreshTimer=null;
 let detailRefreshTimer=null;
 function loadRules(){try{const saved=JSON.parse(localStorage.getItem('mnemosyne_rules')||'null');if(saved&&typeof saved==='object')return Object.fromEntries(Object.keys(DEFAULT_RULES).map(k=>[k,Array.isArray(saved[k])?saved[k]:[...DEFAULT_RULES[k]]]));}catch{}return structuredClone(DEFAULT_RULES)}
 function saveRules(){localStorage.setItem('mnemosyne_rules',JSON.stringify(rules))}
-function page(){if(refreshTimer){clearTimeout(refreshTimer);refreshTimer=null}if(detailRefreshTimer){clearTimeout(detailRefreshTimer);detailRefreshTimer=null}const path=location.pathname,tab=new URLSearchParams(location.search).get('tab')||'';const settings=path.includes('settings'),verify=path.includes('verify'),tasks=path.includes('tasks')||tab==='history',results=path.includes('results'),review=tab==='review',ciTasks=tab==='intelligence',ciResults=tab==='company-results';document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.pathname===path||(a.pathname==='/search'&&['/','/tasks','/results','/verify'].includes(path))));if(settings)renderSettings();else if(verify)renderVerify();else if(ciTasks)renderIntelligenceTasks();else if(ciResults)renderIntelligenceResults();else if(review)renderCompanyReview();else if(tasks)renderTasks();else if(results)renderResults();else renderSearch()}
+function page(){if(!window.__mnSession)return;if(refreshTimer){clearTimeout(refreshTimer);refreshTimer=null}if(detailRefreshTimer){clearTimeout(detailRefreshTimer);detailRefreshTimer=null}const path=location.pathname,tab=new URLSearchParams(location.search).get('tab')||'';const settings=path.includes('settings'),verify=path.includes('verify'),tasks=path.includes('tasks')||tab==='history',results=path.includes('results'),review=tab==='review',ciTasks=tab==='intelligence',ciResults=tab==='company-results';document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.pathname===path||(a.pathname==='/search'&&['/','/tasks','/results','/verify'].includes(path))));if(settings)renderSettings();else if(verify)renderVerify();else if(ciTasks)renderIntelligenceTasks();else if(ciResults)renderIntelligenceResults();else if(review)renderCompanyReview();else if(tasks)renderTasks();else if(results)renderResults();else renderSearch()}
 function renderSearch(){
 app.innerHTML=`<div class="eyebrow">DISCOVERY / SEARCH</div><h1 class="title">官网发现</h1><p class="desc">通过 Google 自然搜索发现全球潜在企业官网。配置搜索条件后启动采集，系统会逐页执行并实时反馈进度。</p><div class="discovery-tabs workflow-tabs"><a class="active" href="/search">开始采集</a><a href="/search?tab=review">官网审核</a><a href="/search?tab=intelligence">采集任务</a><a href="/search?tab=company-results">情报结果</a><a href="/search?tab=history">搜索历史</a></div><section class="panel"><h3>全球企业官网搜索</h3><div class="grid"><div class="field wide"><label>任务名称（可选）</label><input id="task-name" placeholder="例如：德国低压开关设备制造商"></div><div class="field"><label>行业 / 产品关键词</label><input id="kw" value="electrical equipment"></div><div class="field"><label>企业类型</label><select id="type"><option value="manufacturer OR factory OR producer">制造商 / 工厂</option><option value="distributor OR wholesaler">经销商 / 批发商</option><option value='"electrical engineering" OR contractor'>工程公司 / 承包商</option><option value="brand OR company">品牌 / 企业</option></select></div><div class="field"><label>目标国家</label><select id="country" data-country-flags="true">${countryOptions('global')}</select></div><div class="field"><label>搜索语言</label><select id="lang"><option value="en">英语</option><option value="de">德语</option><option value="fr">法语</option><option value="es">西班牙语</option><option value="ja">日语</option><option value="zh-CN">简体中文</option></select></div><div class="field"><label>必须包含短语（可选）</label><input id="phrase" placeholder="low voltage switchgear"></div><div class="field"><label>起始页码</label><input id="start-page" type="number" min="1" max="100" value="1"></div><div class="field"><label>终止页码</label><input id="end-page" type="number" min="1" max="100" value="1"></div><div class="field wide"><label>排除类别</label><div class="checks"><label><input type="checkbox" name="ex" value="shop" checked> 电商</label><label><input type="checkbox" name="ex" value="social" checked> 社交</label><label><input type="checkbox" name="ex" value="b2b" checked> B2B 平台</label><label><input type="checkbox" name="ex" value="media" checked> 资讯媒体</label></div></div><div class="field wide"><div class="code-label"><label>实时 Google 搜索语法</label><span class="code-meta">GOOGLE QUERY · LIVE PREVIEW</span></div><pre class="syntax-code"><code id="preview"></code></pre></div></div><p class="task-create-actions"><button class="btn" id="go">创建并启动任务</button><span class="hint">每页约 10 条结果 · 单个任务最多 10 页</span></p><div id="error" class="toast" role="alert"></div></section><div id="live-task" class="live-task" aria-live="polite"></div>`;
 const ids=['kw','type','country','lang','phrase'];
