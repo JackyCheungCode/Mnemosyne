@@ -515,3 +515,26 @@ aside#app-sidebar nav a.active .nav-icon{color:#714b67}
 .task-workspace-note{margin:0 0 22px;padding:13px 16px;border-left:3px solid #714b67;background:#f7f4f6;color:#5f6368;font-size:12px;line-height:1.7}
 @media(max-width:900px){.task-stage-nav{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:560px){.task-stage-nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:6px}.task-stage-nav a{justify-content:flex-start;font-size:11px}.task-stage-nav a span{width:20px;height:20px}}
+
+
+/* Live task feedback: animate color only while the backend reports active work.
+   The filled width remains tied to persisted task/page progress. */
+.progress-track{position:relative;overflow:hidden}
+.progress-track i{position:relative;display:block;max-width:100%;height:100%;border-radius:inherit}
+.progress-track.is-active i{
+ background:linear-gradient(105deg,#714b67 0%,#8f6384 24%,#017e84 52%,#00a09d 76%,#714b67 100%);
+ background-size:220% 100%;
+ animation:mn-progress-color 2.8s linear infinite;
+ box-shadow:0 0 10px rgba(1,126,132,.18);
+}
+.progress-track.is-active i::after{
+ content:"";position:absolute;inset:0 auto 0 -35%;width:30%;
+ background:linear-gradient(90deg,transparent,rgba(255,255,255,.52),transparent);
+ transform:skewX(-18deg);
+ animation:mn-progress-shimmer 1.8s ease-in-out infinite;
+}
+@keyframes mn-progress-color{from{background-position:100% 50%}to{background-position:-120% 50%}}
+@keyframes mn-progress-shimmer{0%{left:-35%;opacity:0}20%{opacity:.8}100%{left:115%;opacity:0}}
+@media(prefers-reduced-motion:reduce){
+ .progress-track.is-active i,.progress-track.is-active i::after{animation:none}
+}
