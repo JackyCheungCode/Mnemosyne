@@ -76,9 +76,17 @@ nav{display:flex;flex-direction:column;gap:22px}
 .review-count{display:grid;justify-items:center;min-width:74px;padding:9px 14px;border-radius:12px;background:#e8f0fe;color:#174ea6}
 .review-count strong{font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums}
 .review-count span{font-size:10px;margin-top:4px}
-.review-filters{display:grid;grid-template-columns:minmax(200px,1fr) auto auto;gap:10px;margin:20px 0 14px}
+.review-filters{display:grid;grid-template-columns:minmax(200px,1fr) 160px auto auto;gap:10px;margin:20px 0 14px}
 .review-filters input{height:42px;border:1px solid #dadce0;border-radius:8px;padding:0 12px;font:13px inherit;min-width:0}
 .review-toolbar{padding:11px 0;border-top:1px solid #edf0f2}
+.review-filters select,.review-bulk-actions select{height:42px;min-width:150px;border:1px solid #dadce0;border-radius:8px;padding:0 34px 0 12px;background:#fff;color:#3c4043;font:13px inherit}
+.review-toolbar{flex-wrap:wrap}
+.review-bulk-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.review-bulk-actions select{height:36px;min-width:160px}
+.review-bulk-actions .btn{white-space:nowrap}
+.company-review-table td:nth-child(6) small{display:block;max-width:180px;margin-top:4px;color:#7b5b22;white-space:normal}
+@media(max-width:760px){.review-filters{grid-template-columns:1fr 1fr}.review-filters input{grid-column:1/-1}.review-bulk-actions{width:100%}.review-bulk-actions select{flex:1;min-width:120px}.review-footer{align-items:stretch;flex-direction:column}.review-footer>div{display:flex;gap:8px}.review-footer .btn{flex:1}}
+
 .select-all{font-size:12px;color:#3c4043;display:flex;align-items:center;gap:8px}
 .select-all input,.review-check{accent-color:#1a73e8;width:16px;height:16px}
 .company-review-table{min-width:1100px}
