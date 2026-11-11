@@ -4,7 +4,7 @@ const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:
 export async function onRequestPost({request}){
  let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}
  const auth=request.headers.get("Authorization")||"";
- if(!/^Bearer\\s+[A-Za-z0-9._-]+$/.test(auth))return json({error:"请先登录管理员账户",code:"AUTH_REQUIRED"},401);
+ if(!/^Bearer\s+[A-Za-z0-9._-]+$/.test(auth))return json({error:"请先登录管理员账户",code:"AUTH_REQUIRED"},401);
  const actions=["list_candidates","save_review","create_task","list_tasks","get_task","list_results"];
  if(!actions.includes(String(body.action||"")))return json({error:"不支持的操作"},400);
  try{const headers={"Authorization":auth,"apikey":SUPABASE_ANON_KEY,"Content-Type":"application/json"};
