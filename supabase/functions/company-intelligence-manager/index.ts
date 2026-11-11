@@ -94,6 +94,22 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
   const {error:ue}=await db.from("websites").update({collection_status:"queued",updated_at:new Date().toISOString()}).in("id",ids);if(ue)throw ue;
   EdgeRuntime.waitUntil(runTask(t.id));return reply({task:t,selected:ids.length,message:"已创建官网采集批次"},202);
  }
+ if(b.action==="retry_items"){
+  const taskCode=String(b.taskCode||"");
+  const ids=[...new Set((b.itemIds||[]).filter((x:any)=>typeof x==="string"))];
+  if(!taskCode||!ids.length||ids.length>100)return reply({error:"请指定任务和 1–100 个失败项目"},400);
+  const {data:task,error:te}=await db.from("company_intelligence_tasks").select("id,task_code").eq("task_code",taskCode).maybeSingle();if(te)throw te;if(!task)return reply({error:"未找到采集批次"},404);
+  const {data:items,error:ie}=await db.from("company_intelligence_items").select("id,website_id,status").eq("task_id",task.id).in("id",ids);if(ie)throw ie;
+  if((items||[]).length!==ids.length)return reply({error:"部分采集项目不属于当前批次"},409);
+  if((items||[]).some(x=>x.status!=="failed"))return reply({error:"只能重试失败的网站项目"},409);
+  const now=new Date().toISOString();
+  const {error:ue}=await db.from("company_intelligence_items").update({status:"queued",error_message:null,started_at:null,completed_at:null}).in("id",ids);if(ue)throw ue;
+  const websiteIds=[...new Set((items||[]).map(x=>x.website_id).filter(Boolean))];
+  if(websiteIds.length){const {error:we}=await db.from("websites").update({collection_status:"queued",updated_at:now}).in("id",websiteIds);if(we)throw we;}
+  const {error:taskError}=await db.from("company_intelligence_tasks").update({status:"running",completed_at:null,error_summary:null,failed_items:0}).eq("id",task.id);if(taskError)throw taskError;
+  EdgeRuntime.waitUntil(runTask(task.id));
+  return reply({queued:ids.length,message:"失败项目已重新排队"},202);
+ }
  if(b.action==="list_tasks"){const {data,error}=await db.from("company_intelligence_tasks").select("*").order("created_at",{ascending:false}).limit(100);if(error)throw error;return reply({tasks:data||[]});}
  if(b.action==="get_task"){const {data,error}=await db.from("company_intelligence_tasks").select("*,company_intelligence_items(*)").eq("task_code",String(b.taskCode||"")).single();if(error)return reply({error:"未找到情报采集任务"},404);return reply({task:data});}
  if(b.action==="list_results"){const limit=Math.min(200,Math.max(1,Number(b.limit)||50)),page=Math.max(1,Number(b.page)||1);let q=db.from("company_intelligence_results").select("*",{count:"exact"}).order("created_at",{ascending:false}).range((page-1)*limit,page*limit-1);if(b.taskId)q=q.eq("task_id",String(b.taskId));if(b.domain)q=q.ilike("domain","%"+String(b.domain).slice(0,100)+"%");const {data,error,count}=await q;if(error)throw error;return reply({results:data||[],total:count||0,page,limit});}
