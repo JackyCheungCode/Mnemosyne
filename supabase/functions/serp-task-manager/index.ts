@@ -25,15 +25,15 @@ async function runTask(id:string,token:string){try{const {data:t,error}=await db
  const {error:ie}=await db.from("search_results").upsert(rows,{onConflict:"task_id,url",ignoreDuplicates:true});if(ie)throw ie;
  const {data:stored,error:se}=await db.from("search_results").select("id,task_id,keyword,country,language,page_number,rank,title,url,domain,description,source_url,discovered_at").eq("task_id",id).eq("page_number",p);
  if(se)throw se;
- const hosts=[...new Set((stored||[]).map((x:any)=>String(x.domain||"").toLowerCase().replace(/^www\\./,"")).filter(Boolean))];
+ const hosts=[...new Set((stored||[]).map((x:any)=>String(x.domain||"").toLowerCase().replace(/^www\./,"")).filter(Boolean))];
  if(hosts.length){
   const now=new Date().toISOString();
-  const websiteRows=hosts.map(host=>{const first=(stored||[]).find((x:any)=>String(x.domain||"").toLowerCase().replace(/^www\\./,"")===host);return{normalized_host:host,display_name:first?.title||host,canonical_url:first?.url||("https://"+host),country:first?.country||"",first_discovered_at:first?.discovered_at||now,last_discovered_at:now}});
+  const websiteRows=hosts.map(host=>{const first=(stored||[]).find((x:any)=>String(x.domain||"").toLowerCase().replace(/^www\./,"")===host);return{normalized_host:host,display_name:first?.title||host,canonical_url:first?.url||("https://"+host),country:first?.country||"",first_discovered_at:first?.discovered_at||now,last_discovered_at:now}});
   const {error:we}=await db.from("websites").upsert(websiteRows,{onConflict:"normalized_host",ignoreDuplicates:true});if(we)throw we;
   const {error:ue}=await db.from("websites").update({last_discovered_at:now,updated_at:now}).in("normalized_host",hosts);if(ue)throw ue;
   const {data:websiteRowsFound,error:wm}=await db.from("websites").select("id,normalized_host").in("normalized_host",hosts);if(wm)throw wm;
   const websiteMap=new Map((websiteRowsFound||[]).map((w:any)=>[w.normalized_host,w.id]));
-  const discoveries=(stored||[]).map((x:any)=>({website_id:websiteMap.get(String(x.domain||"").toLowerCase().replace(/^www\\./,"")),search_result_id:x.id,search_task_id:x.task_id,keyword:x.keyword,country:x.country,language:x.language,page_number:x.page_number,result_rank:x.rank,original_url:x.url,source_url:x.source_url,title:x.title,snippet:x.description,discovered_at:x.discovered_at})).filter((x:any)=>x.website_id);
+  const discoveries=(stored||[]).map((x:any)=>({website_id:websiteMap.get(String(x.domain||"").toLowerCase().replace(/^www\./,"")),search_result_id:x.id,search_task_id:x.task_id,keyword:x.keyword,country:x.country,language:x.language,page_number:x.page_number,result_rank:x.rank,original_url:x.url,source_url:x.source_url,title:x.title,snippet:x.description,discovered_at:x.discovered_at})).filter((x:any)=>x.website_id);
   if(discoveries.length){const {error:de}=await db.from("website_discoveries").upsert(discoveries,{onConflict:"search_result_id",ignoreDuplicates:true});if(de)throw de}
  }
 }
