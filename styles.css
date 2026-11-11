@@ -338,3 +338,25 @@ body.sidebar-collapsed aside#app-sidebar nav a{height:38px}
  .discovery-tabs{gap:16px}
  .discovery-tabs a{font-size:11px}
 }
+
+
+/* Odoo 20 control layer: searchable-space dropdown presentation and interaction states */
+.odoo-select{position:relative;width:100%;min-width:0}
+.odoo-native-select{position:absolute!important;width:1px!important;height:1px!important;min-width:0!important;padding:0!important;margin:0!important;opacity:0!important;pointer-events:none!important;overflow:hidden!important;clip:rect(0,0,0,0)!important}
+.odoo-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;height:36px;padding:0 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;color:#222;text-align:left;font-size:12px;cursor:pointer}
+.odoo-select-trigger:hover{border-color:#aaa}
+.odoo-select-trigger:focus-visible{outline:2px solid rgba(0,0,0,.15);outline-offset:1px;border-color:#777}
+.odoo-select-trigger:disabled{background:#f5f5f5;color:#999;cursor:not-allowed}
+.odoo-select-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.odoo-select-chevron{flex:none;color:#777;font-size:16px;line-height:1;transform:translateY(-2px)}
+.odoo-select-menu{position:absolute;z-index:40;top:calc(100% + 4px);left:0;right:0;max-height:260px;overflow:auto;padding:4px;background:#fff;border:1px solid #ddd;border-radius:5px;box-shadow:0 8px 24px rgba(0,0,0,.13)}
+.odoo-select-menu[hidden]{display:none}
+.odoo-select-option{display:flex;align-items:center;width:100%;min-height:32px;padding:6px 9px;border:0;border-radius:3px;background:transparent;color:#333;text-align:left;font-size:12px;cursor:pointer}
+.odoo-select-option:hover,.odoo-select-option:focus{background:#f2f2f2;outline:0}
+.odoo-select-option[aria-selected=true]{background:#ededed;color:#111;font-weight:600}
+.odoo-select-option:disabled{color:#aaa;cursor:not-allowed}
+.odoo-select.is-open .odoo-select-trigger{border-color:#888}
+.field .odoo-select{display:block}
+.result-filters .odoo-select{min-width:0}
+button,.btn,.text-btn,.odoo-select-trigger,.odoo-select-option{transition:background-color .14s ease,border-color .14s ease,color .14s ease,box-shadow .14s ease}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
