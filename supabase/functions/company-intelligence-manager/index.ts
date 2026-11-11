@@ -58,13 +58,14 @@ async function requireAdmin(req:Request){
 }
 Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{headers:cors});if(req.method!=="POST")return reply({error:"Method not allowed"},405);try{if(!await requireAdmin(req))return reply({error:"管理员身份验证失败，请重新登录",code:"ADMIN_AUTH_REQUIRED"},401);const b=await req.json();
  if(b.action==="list_candidates"){
+  const taskCode=String(b.searchTaskCode||"").trim();let scopedTaskId=null;if(taskCode){const {data:searchTask,error:se}=await db.from("search_tasks").select("id").eq("task_code",taskCode).maybeSingle();if(se)throw se;if(!searchTask)return reply({error:"未找到对应的搜索任务"},404);scopedTaskId=searchTask.id;}
   const {data:websites,error}=await db.from("websites").select("id,normalized_host,display_name,canonical_url,country,review_status,review_reason,collection_status,first_discovered_at,last_discovered_at,last_collected_at").order("last_discovered_at",{ascending:false}).limit(1000);
   if(error)throw error;
   const ids=(websites||[]).map(x=>x.id);
-  const {data:discoveries,error:de}=ids.length?await db.from("website_discoveries").select("website_id,search_result_id,search_task_id,keyword,country,language,original_url,source_url,title,snippet,discovered_at").in("website_id",ids).order("discovered_at",{ascending:false}).limit(5000):{data:[],error:null};
+  let discoveryQuery=ids.length?db.from("website_discoveries").select("website_id,search_result_id,search_task_id,keyword,country,language,original_url,source_url,title,snippet,discovered_at").in("website_id",ids).order("discovered_at",{ascending:false}).limit(5000):null;if(discoveryQuery&&scopedTaskId)discoveryQuery=discoveryQuery.eq("search_task_id",scopedTaskId);const {data:discoveries,error:de}=discoveryQuery?await discoveryQuery:{data:[],error:null};
   if(de)throw de;
   const grouped=new Map();for(const d of discoveries||[]){if(!grouped.has(d.website_id))grouped.set(d.website_id,[]);grouped.get(d.website_id).push(d)}
-  let candidates=(websites||[]).map(w=>{const sources=grouped.get(w.id)||[],latest=sources[0]||{};return{id:w.id,title:w.display_name||latest.title||w.normalized_host,domain:w.normalized_host,url:w.canonical_url||latest.original_url||("https://"+w.normalized_host),country:w.country||latest.country||"",keyword:latest.keyword||"",description:latest.snippet||"",discovered_at:w.last_discovered_at||latest.discovered_at,review_status:w.review_status,review_reason:w.review_reason,collection_status:w.collection_status,source_count:sources.length,sources};});
+  let candidates=(websites||[]).filter(w=>!scopedTaskId||grouped.has(w.id)).map(w=>{const sources=grouped.get(w.id)||[],latest=sources[0]||{};return{id:w.id,title:w.display_name||latest.title||w.normalized_host,domain:w.normalized_host,url:w.canonical_url||latest.original_url||("https://"+w.normalized_host),country:w.country||latest.country||"",keyword:latest.keyword||"",description:latest.snippet||"",discovered_at:w.last_discovered_at||latest.discovered_at,review_status:w.review_status,review_reason:w.review_reason,collection_status:w.collection_status,source_count:sources.length,sources};});
   const term=String(b.keyword||b.domain||"").trim().toLowerCase();if(term)candidates=candidates.filter(x=>[x.title,x.domain,x.keyword,x.description,...x.sources.map(s=>s.keyword)].some(v=>String(v||"").toLowerCase().includes(term)));
   return reply({candidates});
  }
@@ -85,10 +86,11 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
   const {data:websites,error:we}=await db.from("websites").select("id,normalized_host,display_name,canonical_url,review_status,collection_status").in("id",ids);if(we)throw we;
   if((websites||[]).length!==ids.length)return reply({error:"部分官网已不存在，请刷新列表"},409);
   if((websites||[]).some(w=>w.review_status!=="approved"))return reply({error:"所选网站中存在未审核通过的官网，请先完成审核"},409);
-  const {data:discoveryRows,error:de}=await db.from("website_discoveries").select("website_id,search_result_id,original_url,title,discovered_at").in("website_id",ids).order("discovered_at",{ascending:false});if(de)throw de;
+  let sourceSearchTaskId=null;const sourceSearchTaskCode=String(b.searchTaskCode||"").trim();if(sourceSearchTaskCode){const {data:sourceTask,error:st}=await db.from("search_tasks").select("id").eq("task_code",sourceSearchTaskCode).maybeSingle();if(st)throw st;if(!sourceTask)return reply({error:"未找到对应的搜索任务"},404);sourceSearchTaskId=sourceTask.id;}
+  let discoveryQuery=db.from("website_discoveries").select("website_id,search_result_id,search_task_id,original_url,title,discovered_at").in("website_id",ids).order("discovered_at",{ascending:false});if(sourceSearchTaskId)discoveryQuery=discoveryQuery.eq("search_task_id",sourceSearchTaskId);const {data:discoveryRows,error:de}=await discoveryQuery;if(de)throw de;
   const latest=new Map();for(const d of discoveryRows||[])if(!latest.has(d.website_id))latest.set(d.website_id,d);
-  if(ids.some(id=>!latest.has(id)))return reply({error:"部分网站缺少搜索来源记录，暂不能采集"},409);
-  const {data:t,error}=await db.from("company_intelligence_tasks").insert({task_name:String(b.taskName||"官网采集批次").slice(0,120),status:"running",total_items:ids.length,started_at:new Date().toISOString()}).select("*").single();if(error)throw error;
+  if(ids.some(id=>!latest.has(id)))return reply({error:"所选官网并非全部来自当前搜索任务，或缺少搜索来源记录"},409);
+  const {data:t,error}=await db.from("company_intelligence_tasks").insert({task_name:String(b.taskName||"官网采集批次").slice(0,120),source_search_task_id:sourceSearchTaskId,status:"running",total_items:ids.length,started_at:new Date().toISOString()}).select("*").single();if(error)throw error;
   const rows=(websites||[]).map(w=>{const d=latest.get(w.id);return{task_id:t.id,search_result_id:d.search_result_id,website_id:w.id,domain:w.normalized_host,website_url:w.canonical_url||d.original_url,title:w.display_name||d.title||w.normalized_host,status:"queued"}});
   const {error:ie}=await db.from("company_intelligence_items").insert(rows);if(ie)throw ie;
   const {error:ue}=await db.from("websites").update({collection_status:"queued",updated_at:new Date().toISOString()}).in("id",ids);if(ue)throw ue;
@@ -110,16 +112,24 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
   EdgeRuntime.waitUntil(runTask(task.id));
   return reply({queued:ids.length,message:"失败项目已重新排队"},202);
  }
- if(b.action==="list_tasks"){const {data,error}=await db.from("company_intelligence_tasks").select("*").order("created_at",{ascending:false}).limit(100);if(error)throw error;return reply({tasks:data||[]});}
+ if(b.action==="list_tasks"){let q=db.from("company_intelligence_tasks").select("*").order("created_at",{ascending:false}).limit(100);const sourceCode=String(b.sourceSearchTaskCode||"").trim();if(sourceCode){const {data:st,error:se}=await db.from("search_tasks").select("id").eq("task_code",sourceCode).maybeSingle();if(se)throw se;if(!st)return reply({error:"未找到搜索任务"},404);q=q.eq("source_search_task_id",st.id);}const {data,error}=await q;if(error)throw error;return reply({tasks:data||[]});}
  if(b.action==="get_task"){const {data,error}=await db.from("company_intelligence_tasks").select("*,company_intelligence_items(*)").eq("task_code",String(b.taskCode||"")).single();if(error)return reply({error:"未找到情报采集任务"},404);return reply({task:data});}
  if(b.action==="list_companies"){
   const limit=Math.min(200,Math.max(1,Number(b.limit)||50)),page=Math.max(1,Number(b.page)||1);
-  const {data,error}=await db.from("companies").select("id,company_name,description,country,address,emails,phones,social_links,main_products,profile_status,last_collected_at,created_at,company_websites(relationship_type,is_primary,websites(id,normalized_host,canonical_url,country,collection_status,last_collected_at))").order("last_collected_at",{ascending:false}).limit(1000);
+  let companyQuery=db.from("companies").select("id,company_name,description,country,address,emails,phones,social_links,main_products,profile_status,verification_status,verification_notes,verified_at,last_collected_at,created_at,company_websites(relationship_type,is_primary,websites(id,normalized_host,canonical_url,country,collection_status,last_collected_at))").order("last_collected_at",{ascending:false}).limit(1000);if(b.verifiedOnly)companyQuery=companyQuery.eq("verification_status","verified");if(b.verificationStatus)companyQuery=companyQuery.eq("verification_status",String(b.verificationStatus));const sourceCode=String(b.searchTaskCode||"").trim();if(sourceCode){const {data:st,error:se}=await db.from("search_tasks").select("id").eq("task_code",sourceCode).maybeSingle();if(se)throw se;if(!st)return reply({error:"未找到搜索任务"},404);const {data:collectionTasks,error:cte}=await db.from("company_intelligence_tasks").select("id").eq("source_search_task_id",st.id);if(cte)throw cte;const taskIds=(collectionTasks||[]).map(x=>x.id);if(!taskIds.length)return reply({companies:[],total:0,page:Number(b.page)||1,limit:Number(b.limit)||50});const {data:versions,error:ve}=await db.from("company_intelligence_versions").select("company_id").in("task_id",taskIds);if(ve)throw ve;const companyIds=[...new Set((versions||[]).map(x=>x.company_id))];if(!companyIds.length)return reply({companies:[],total:0,page:Number(b.page)||1,limit:Number(b.limit)||50});companyQuery=companyQuery.in("id",companyIds);}const {data,error}=await companyQuery;
   if(error)throw error;
   const term=String(b.keyword||b.domain||"").trim().toLowerCase();
   const filtered=(data||[]).filter((x:any)=>!term||String(x.company_name||"").toLowerCase().includes(term)||(x.company_websites||[]).some((cw:any)=>String(cw.websites?.normalized_host||"").toLowerCase().includes(term)));
   const total=filtered.length,companies=filtered.slice((page-1)*limit,page*limit);
   return reply({companies,total,page,limit});
+ }
+ if(b.action==="verify_company"){
+  const companyId=String(b.companyId||"");const decision=String(b.decision||"");
+  if(!companyId||!["verified","rejected","pending"].includes(decision))return reply({error:"请指定企业和有效的验证结论"},400);
+  const notes=String(b.notes||"").trim().slice(0,2000);
+  const {data:company,error:ce}=await db.from("companies").select("id").eq("id",companyId).maybeSingle();if(ce)throw ce;if(!company)return reply({error:"未找到企业档案"},404);
+  const {error:ue}=await db.from("companies").update({verification_status:decision,verification_notes:notes||null,verified_at:decision==="verified"?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq("id",companyId);if(ue)throw ue;
+  return reply({saved:true,verification_status:decision});
  }
  if(b.action==="get_company"){
   const id=String(b.companyId||"");if(!id)return reply({error:"缺少企业档案编号"},400);
