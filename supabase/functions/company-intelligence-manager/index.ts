@@ -149,8 +149,7 @@ Deno.serve(async(req)=>{if(req.method==="OPTIONS")return new Response("ok",{head
   const websiteIds=[...new Set((items||[]).map(x=>x.website_id).filter(Boolean))];
   if(websiteIds.length){const {error:we}=await db.from("websites").update({collection_status:"queued",updated_at:now}).in("id",websiteIds);if(we)throw we;}
   const {error:taskError}=await db.from("company_intelligence_tasks").update({status:"running",completed_at:null,error_summary:null,failed_items:0}).eq("id",task.id);if(taskError)throw taskError;
-  EdgeRuntime.waitUntil(runTask(task.id));
-  return reply({queued:ids.length,message:"失败项目已重新排队"},202);
+  return reply({queued:ids.length,message:"失败项目已重新排队，后台将自动处理"},202);
  }
  if(b.action==="list_tasks"){const {data,error}=await db.from("company_intelligence_tasks").select("*").order("created_at",{ascending:false}).limit(100);if(error)throw error;return reply({tasks:data||[]});}
  if(b.action==="get_task"){const {data,error}=await db.from("company_intelligence_tasks").select("*,company_intelligence_items(*)").eq("task_code",String(b.taskCode||"")).single();if(error)return reply({error:"未找到情报采集任务"},404);return reply({task:data});}
